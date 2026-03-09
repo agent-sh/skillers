@@ -20,28 +20,19 @@ const os = require('os');
 const STATE_DIR = process.env.AI_STATE_DIR || '.claude';
 const CWD = process.cwd();
 
+function readConfig(configPath) {
+  if (!fs.existsSync(configPath)) return null;
+  try {
+    return JSON.parse(fs.readFileSync(configPath, 'utf8'));
+  } catch (err) {
+    process.stderr.write(`[WARN] skillers: failed to parse ${configPath}: ${err.message}\n`);
+    return null;
+  }
+}
+
 function getConfig() {
-  // Check repo-scoped config
-  const repoConfig = path.join(CWD, STATE_DIR, 'skillers', 'config.json');
-  if (fs.existsSync(repoConfig)) {
-    try {
-      return JSON.parse(fs.readFileSync(repoConfig, 'utf8'));
-    } catch {
-      return null;
-    }
-  }
-
-  // Check global config
-  const globalConfig = path.join(os.homedir(), STATE_DIR, 'skillers', 'config.json');
-  if (fs.existsSync(globalConfig)) {
-    try {
-      return JSON.parse(fs.readFileSync(globalConfig, 'utf8'));
-    } catch {
-      return null;
-    }
-  }
-
-  return null;
+  return readConfig(path.join(CWD, STATE_DIR, 'skillers', 'config.json'))
+    || readConfig(path.join(os.homedir(), STATE_DIR, 'skillers', 'config.json'));
 }
 
 function getBufferSize(scope) {
@@ -58,9 +49,9 @@ function getBufferSize(scope) {
 
   const latest = path.join(bufferDir, files[files.length - 1]);
   try {
-    const stat = fs.statSync(latest);
-    return stat.size;
-  } catch {
+    return fs.statSync(latest).size;
+  } catch (err) {
+    process.stderr.write(`[WARN] skillers: failed to stat ${latest}: ${err.message}\n`);
     return 0;
   }
 }
@@ -92,9 +83,9 @@ const shouldOfferCompact = bufferSize > COMPACT_THRESHOLD;
 // Output the prompt injection
 // This gets injected into the conversation at the Stop event
 let prompt = `<skillers-observation>
-[skillers:on] If this turn had a notable user pain point, repeated request, new task theme, or expressed wish - append ONE line to "${bufferFile}" via the Write tool (append mode - read existing content first, then write with the new line appended). Format:
+[skillers:on] If this turn had a notable user pain point, repeated request, new task theme, or expressed wish - append ONE line to "${bufferFile}" using Bash: echo '...' >> "${bufferFile}". Format:
 {"ts":"${new Date().toISOString()}","t":"pain|repeat|task|wish|workflow","v":"<5 words max>","ctx":"<file or area if relevant>"}
-If nothing notable happened this turn, do nothing. This is background logging - do not mention it to the user.
+NEVER log API keys, passwords, tokens, secrets, PII, or file contents in the "v" or "ctx" fields. Only log abstract workflow descriptions. Do NOT read any files to construct the observation. If nothing notable happened this turn, do nothing. This is background logging - do not mention it to the user.
 </skillers-observation>`;
 
 if (shouldOfferCompact) {

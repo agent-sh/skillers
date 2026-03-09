@@ -51,49 +51,63 @@ for (const [filePath, message] of requiredFiles) {
 
 // --- plugin.json ---
 
-const pluginJson = JSON.parse(read('.claude-plugin/plugin.json'));
-if (pluginJson.name !== 'skillers') {
+function parseJson(filePath, label) {
+  try {
+    return JSON.parse(read(filePath));
+  } catch (e) {
+    failures.push(`Failed to parse ${label}: ${e.message}`);
+    return null;
+  }
+}
+
+const pluginJson = parseJson('.claude-plugin/plugin.json', 'plugin.json');
+if (pluginJson && pluginJson.name !== 'skillers') {
   failures.push('plugin.json name must be "skillers"');
 }
 
 // --- components.json ---
 
-const components = JSON.parse(read('components.json'));
-if (!components.agents || !components.agents.includes('skillers-compactor')) {
-  failures.push('components.json must include skillers-compactor agent');
-}
-if (!components.agents || !components.agents.includes('skillers-recommender')) {
-  failures.push('components.json must include skillers-recommender agent');
-}
-if (!components.skills || !components.skills.includes('compact')) {
-  failures.push('components.json must include compact skill');
-}
-if (!components.skills || !components.skills.includes('recommend')) {
-  failures.push('components.json must include recommend skill');
-}
-if (!components.commands || !components.commands.includes('skillers')) {
-  failures.push('components.json must include skillers command');
+const components = parseJson('components.json', 'components.json');
+if (components) {
+  if (!components.agents || !components.agents.includes('skillers-compactor')) {
+    failures.push('components.json must include skillers-compactor agent');
+  }
+  if (!components.agents || !components.agents.includes('skillers-recommender')) {
+    failures.push('components.json must include skillers-recommender agent');
+  }
+  if (!components.skills || !components.skills.includes('compact')) {
+    failures.push('components.json must include compact skill');
+  }
+  if (!components.skills || !components.skills.includes('recommend')) {
+    failures.push('components.json must include recommend skill');
+  }
+  if (!components.commands || !components.commands.includes('skillers')) {
+    failures.push('components.json must include skillers command');
+  }
 }
 
 // --- hooks.json ---
 
-const hooksJson = JSON.parse(read('hooks/hooks.json'));
-if (!hooksJson.hooks || !hooksJson.hooks.Stop) {
-  failures.push('hooks.json must define a Stop event hook');
-}
-if (hooksJson.hooks && hooksJson.hooks.Stop) {
-  const stopHook = hooksJson.hooks.Stop[0];
-  if (!stopHook || !stopHook.hooks || !stopHook.hooks[0] || stopHook.hooks[0].type !== 'command') {
-    failures.push('Stop hook must be command type');
+const hooksJson = parseJson('hooks/hooks.json', 'hooks.json');
+if (hooksJson) {
+  if (!hooksJson.hooks || !hooksJson.hooks.Stop) {
+    failures.push('hooks.json must define a Stop event hook');
   }
-  if (stopHook && stopHook.hooks && stopHook.hooks[0] && !stopHook.hooks[0].command.includes('observation-gate.js')) {
-    failures.push('Stop hook must reference observation-gate.js');
+  if (hooksJson.hooks && hooksJson.hooks.Stop) {
+    const stopHook = hooksJson.hooks.Stop[0];
+    if (!stopHook || !stopHook.hooks || !stopHook.hooks[0] || stopHook.hooks[0].type !== 'command') {
+      failures.push('Stop hook must be command type');
+    }
+    if (stopHook && stopHook.hooks && stopHook.hooks[0] && !stopHook.hooks[0].command.includes('observation-gate.js')) {
+      failures.push('Stop hook must reference observation-gate.js');
+    }
   }
 }
 
 // --- observation-gate.js ---
 
 const gate = read('hooks/observation-gate.js');
+assertContains(gate, /function readConfig/, 'observation-gate must use readConfig helper', failures);
 assertContains(gate, /config\.active/, 'observation-gate must check config.active', failures);
 assertContains(gate, /process\.exit\(0\)/, 'observation-gate must exit silently when inactive', failures);
 assertContains(gate, /process\.stdout\.write/, 'observation-gate must write prompt to stdout', failures);
@@ -103,7 +117,9 @@ assertContains(gate, /5 words max/, 'observation-gate must enforce 5-word max', 
 assertContains(gate, /AI_STATE_DIR/, 'observation-gate must respect AI_STATE_DIR env var', failures);
 assertContains(gate, /replace\(\/\[/, 'observation-gate must sanitize SESSION_ID', failures);
 assertContains(gate, /skillers-compact-offer/, 'observation-gate must include compact offer logic', failures);
-assertNotContains(gate, /apiKey|password|secret/i, 'observation-gate must not reference sensitive data', failures);
+assertContains(gate, /NEVER log API keys/, 'observation-gate must forbid logging sensitive data', failures);
+assertContains(gate, /Do NOT read any files/, 'observation-gate must forbid file reading for observations', failures);
+assertNotContains(gate, /Write tool/, 'observation-gate must not use Write tool (use echo append instead)', failures);
 
 // --- command file ---
 
@@ -161,6 +177,8 @@ assertContains(recommendSkill, /hook.*skill.*agent/is, 'recommend skill must cov
 assertContains(recommendSkill, /workflowRatio/, 'recommend skill must define classification ratios', failures);
 assertContains(recommendSkill, /Maximum 5 recommendations/, 'recommend skill must cap recommendations', failures);
 assertContains(recommendSkill, /NEVER make generic suggestions/, 'recommend skill must prohibit generic suggestions', failures);
+assertContains(recommendSkill, /Observation Sanitization/, 'recommend skill must include observation sanitization section', failures);
+assertContains(recommendSkill, /NEVER embed raw observation text into shell commands/, 'recommend skill must prohibit raw observation in commands', failures);
 assertContains(recommendSkill, /scaffold/i, 'recommend skill must include scaffold specs', failures);
 
 // --- Results ---
