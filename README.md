@@ -4,17 +4,14 @@ Learn from your workflow patterns and suggest skills, hooks, and agents to autom
 
 ## How It Works
 
-1. `/skillers on` - Enable pattern learning (repo, global, or both scope)
-2. Work normally - Claude Code saves conversation transcripts automatically
-3. `/skillers compact` - Analyze transcripts and extract recurring patterns into weighted knowledge
-4. `/skillers recommend` - Get actionable suggestions for automation
+1. Work normally - Claude Code saves conversation transcripts automatically
+2. `/skillers compact` - Analyze transcripts and extract recurring patterns into weighted knowledge
+3. `/skillers recommend` - Get actionable suggestions for automation
 
 ## Commands
 
 | Command | Description |
 |---|---|
-| `/skillers on [--scope=repo\|global\|both]` | Enable pattern learning |
-| `/skillers off` | Disable |
 | `/skillers show` | Show status, transcript stats, and knowledge themes |
 | `/skillers compact [--days=N]` | Analyze transcripts and extract patterns |
 | `/skillers recommend` | Suggest skills, hooks, and agents to create |

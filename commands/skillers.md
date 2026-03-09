@@ -1,7 +1,7 @@
 ---
-description: Learn from your workflow patterns and suggest skills, hooks, and agents. Enable or disable pattern learning, analyze transcripts, or get recommendations.
-codex-description: 'Use when user asks to "skillers on", "skillers off", "learn my patterns", "suggest skills", "what should I automate", "skillers recommend", "skillers compact", "skillers show". Observes workflow patterns and suggests automation.'
-argument-hint: "on|off|show|compact|recommend [--scope=repo|global|both] [--days=N]"
+description: Learn from your workflow patterns and suggest skills, hooks, and agents. Analyze transcripts or get recommendations.
+codex-description: 'Use when user asks to "learn my patterns", "suggest skills", "what should I automate", "skillers recommend", "skillers compact", "skillers show". Analyzes workflow patterns and suggests automation.'
+argument-hint: "show|compact|recommend [--scope=repo|global|both | --global | --repo] [--days=N]"
 allowed-tools: Read, Write, Bash(node:*), Bash(git:*), Task, Skill, AskUserQuestion, Glob
 ---
 
@@ -23,9 +23,7 @@ Parse from `$ARGUMENTS`:
 
 | Subcommand | Description |
 |---|---|
-| `on` | Enable skillers for current scope |
-| `off` | Disable skillers |
-| `show` | Display current config and knowledge stats |
+| `show` | Display current config and knowledge stats (default) |
 | `compact` | Analyze transcripts and extract patterns into knowledge files |
 | `recommend` | Analyze accumulated knowledge and suggest automations |
 
@@ -57,50 +55,11 @@ No hooks or per-turn recording needed - the transcripts are the data source.
 
 ```javascript
 const args = '$ARGUMENTS'.trim().split(/\s+/).filter(Boolean);
-const subcommand = args.find(a => ['on', 'off', 'show', 'compact', 'recommend'].includes(a)) || 'show';
+const subcommand = args.find(a => ['show', 'compact', 'recommend'].includes(a)) || 'show';
 const scopeFlag = args.find(a => a.startsWith('--scope='));
 const scope = scopeFlag ? scopeFlag.split('=')[1] : args.includes('--global') ? 'global' : args.includes('--repo') ? 'repo' : 'global';
 const days = parseInt((args.find(a => a.startsWith('--days=')) || '--days=7').split('=')[1], 10);
 ```
-
-### Subcommand: `on`
-
-1. Determine state directory based on scope:
-   - `repo`: `{CWD}/{STATE_DIR}/skillers/`
-   - `global`: `~/{STATE_DIR}/skillers/`
-   - `both`: write config to both locations
-
-2. Create directory structure:
-   ```
-   {stateDir}/skillers/
-   ├── config.json
-   └── knowledge/
-   ```
-
-3. Write config:
-   ```json
-   {
-     "active": true,
-     "scope": "global",
-     "createdAt": "2026-03-09T...",
-     "version": "0.2.0"
-   }
-   ```
-
-4. Output:
-   ```
-   [OK] Skillers enabled (scope: global)
-   Knowledge will be saved to: {path}
-   Data source: conversation transcripts (~/.claude/projects/)
-   Run /skillers compact to analyze recent sessions.
-   Run /skillers show to check status. Run /skillers off to disable.
-   ```
-
-### Subcommand: `off`
-
-1. Read existing config(s) - check both repo and global
-2. Set `active: false` in all found configs
-3. Output: `[OK] Skillers disabled`
 
 ### Subcommand: `show`
 
@@ -128,6 +87,8 @@ Knowledge
 ```
 
 ### Subcommand: `compact`
+
+Auto-initialize if needed: create `{stateDir}/skillers/config.json` and `knowledge/` directory if they don't exist.
 
 Spawn the compactor subagent:
 
@@ -195,7 +156,7 @@ For each selected recommendation:
 
 | Error | Response |
 |---|---|
-| No config found (show/compact/recommend) | `[WARN] Skillers is not enabled. Run /skillers on` |
+| No config found (show/recommend) | `[WARN] Skillers not initialized. Run /skillers compact to get started.` |
 | No transcripts found (compact) | `[OK] No conversation transcripts found` |
 | Empty knowledge (recommend) | `[WARN] Not enough data yet. Run /skillers compact first` |
 | Subagent failure | `[ERROR] {agent} failed: {error}. Try running /skillers compact manually` |
