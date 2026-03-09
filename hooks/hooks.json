@@ -1,15 +1,3 @@
 {
-  "hooks": {
-    "Stop": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "node -e \"const p=require('path'),d=p.join(require('os').homedir(),'.claude','plugins','cache','agentsys','skillers');try{const v=require('fs').readdirSync(d).sort().pop();require(p.join(d,v,'hooks','observation-gate.js'))}catch{}\"",
-            "timeout": 5000
-          }
-        ]
-      }
-    ]
-  }
+  "hooks": {}
 }

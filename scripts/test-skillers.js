@@ -10,25 +10,37 @@ function read(relPath) {
 }
 
 function assertContains(text, pattern, message, failures) {
+  assertionCount++;
   if (!pattern.test(text)) {
     failures.push(message);
   }
 }
 
 function assertNotContains(text, pattern, message, failures) {
+  assertionCount++;
   if (pattern.test(text)) {
     failures.push(message);
   }
 }
 
 function assertFileExists(relPath, message, failures) {
+  assertionCount++;
   const full = path.join(root, relPath);
   if (!fs.existsSync(full)) {
     failures.push(message);
   }
 }
 
+function assertFileNotExists(relPath, message, failures) {
+  assertionCount++;
+  const full = path.join(root, relPath);
+  if (fs.existsSync(full)) {
+    failures.push(message);
+  }
+}
+
 const failures = [];
+let assertionCount = 0;
 
 // --- File existence checks ---
 
@@ -37,7 +49,6 @@ const requiredFiles = [
   ['components.json', 'components.json must exist'],
   ['package.json', 'package.json must exist'],
   ['hooks/hooks.json', 'hooks/hooks.json must exist'],
-  ['hooks/observation-gate.js', 'hooks/observation-gate.js must exist'],
   ['commands/skillers.md', 'commands/skillers.md must exist'],
   ['agents/skillers-compactor.md', 'skillers-compactor agent must exist'],
   ['agents/skillers-recommender.md', 'skillers-recommender agent must exist'],
@@ -48,6 +59,10 @@ const requiredFiles = [
 for (const [filePath, message] of requiredFiles) {
   assertFileExists(filePath, message, failures);
 }
+
+// --- Removed files (Stop hook approach replaced by transcript analysis) ---
+
+assertFileNotExists('hooks/observation-gate.js', 'observation-gate.js must NOT exist (replaced by transcript analysis)', failures);
 
 // --- plugin.json ---
 
@@ -86,46 +101,21 @@ if (components) {
   }
 }
 
-// --- hooks.json ---
+// --- hooks.json must be empty (no hooks) ---
 
 const hooksJson = parseJson('hooks/hooks.json', 'hooks.json');
 if (hooksJson) {
-  if (!hooksJson.hooks || !hooksJson.hooks.Stop) {
-    failures.push('hooks.json must define a Stop event hook');
-  }
-  if (hooksJson.hooks && hooksJson.hooks.Stop) {
-    const stopHook = hooksJson.hooks.Stop[0];
-    if (!stopHook || !stopHook.hooks || !stopHook.hooks[0] || stopHook.hooks[0].type !== 'command') {
-      failures.push('Stop hook must be command type');
-    }
-    if (stopHook && stopHook.hooks && stopHook.hooks[0] && !stopHook.hooks[0].command.includes('observation-gate.js')) {
-      failures.push('Stop hook must reference observation-gate.js');
-    }
+  const hookKeys = Object.keys(hooksJson.hooks || {});
+  if (hookKeys.length > 0) {
+    failures.push('hooks.json must have empty hooks (no Stop hook - transcript analysis replaces it)');
   }
 }
-
-// --- observation-gate.js ---
-
-const gate = read('hooks/observation-gate.js');
-assertContains(gate, /function readConfig/, 'observation-gate must use readConfig helper', failures);
-assertContains(gate, /config\.active/, 'observation-gate must check config.active', failures);
-assertContains(gate, /process\.exit\(0\)/, 'observation-gate must exit silently when inactive', failures);
-assertContains(gate, /process\.stdout\.write/, 'observation-gate must write prompt to stdout', failures);
-assertContains(gate, /skillers-observation/, 'observation-gate must include skillers-observation tag', failures);
-assertContains(gate, /pain\|repeat\|task\|wish\|workflow/, 'observation-gate must define observation types', failures);
-assertContains(gate, /5 words max/, 'observation-gate must enforce 5-word max', failures);
-assertContains(gate, /AI_STATE_DIR/, 'observation-gate must respect AI_STATE_DIR env var', failures);
-assertContains(gate, /replace\(\/\[/, 'observation-gate must sanitize SESSION_ID', failures);
-assertContains(gate, /skillers-compact-offer/, 'observation-gate must include compact offer logic', failures);
-assertContains(gate, /NEVER log API keys/, 'observation-gate must forbid logging sensitive data', failures);
-assertContains(gate, /Do NOT read any files/, 'observation-gate must forbid file reading for observations', failures);
-assertNotContains(gate, /Write tool/, 'observation-gate must not use Write tool (use echo append instead)', failures);
 
 // --- command file ---
 
 const command = read('commands/skillers.md');
 assertContains(command, /on\|off\|show\|compact\|recommend/, 'command must support all 5 subcommands', failures);
-assertContains(command, /--scope=repo\|global\|both/, 'command must support scope flag', failures);
+assertContains(command, /--scope=repo\|global\|both/, 'command must support scope flag with all values', failures);
 assertContains(command, /subagent_type/, 'command must spawn subagents for compact/recommend', failures);
 assertContains(command, /AskUserQuestion/, 'command must use AskUserQuestion for recommendations', failures);
 assertContains(command, /multiSelect/, 'command must support multi-select for recommendations', failures);
@@ -134,6 +124,8 @@ assertContains(command, /skill-creator/, 'command must check for skill-creator p
 assertContains(command, /enhance/, 'command must offer enhance validation', failures);
 assertContains(command, /NEVER auto-create/, 'command must require user approval', failures);
 assertContains(command, /NEVER log sensitive data/, 'command must prohibit logging sensitive data', failures);
+assertContains(command, /\.claude\/projects/, 'command must reference transcript location', failures);
+assertNotContains(command, /observation-gate/, 'command must not reference observation-gate (removed)', failures);
 
 // --- compactor agent ---
 
@@ -143,6 +135,8 @@ assertContains(compactor, /compact/, 'compactor must reference compact skill', f
 assertContains(compactor, /Skill/, 'compactor must have Skill in tools', failures);
 assertContains(compactor, /MUST invoke the compact skill/, 'compactor must require skill invocation', failures);
 assertContains(compactor, /malformed JSONL/, 'compactor must handle malformed data', failures);
+assertContains(compactor, /transcript/, 'compactor must reference transcripts as data source', failures);
+assertNotContains(compactor, /observation-gate/, 'compactor must not reference observation-gate (removed)', failures);
 
 // --- recommender agent ---
 
@@ -163,9 +157,12 @@ assertContains(compactSkill, /frequency.*recency.*cross-session/si, 'compact ski
 assertContains(compactSkill, /30-day half-life/, 'compact skill must specify recency decay', failures);
 assertContains(compactSkill, /pain.*boost/i, 'compact skill must include pain boost', failures);
 assertContains(compactSkill, /Prune/, 'compact skill must include pruning phase', failures);
-assertContains(compactSkill, /Archive/, 'compact skill must include archiving phase', failures);
 assertContains(compactSkill, /MUST handle malformed JSONL/, 'compact skill must handle malformed data', failures);
-assertContains(compactSkill, /MUST not lose data/, 'compact skill must not lose data', failures);
+assertContains(compactSkill, /\.claude\/projects/, 'compact skill must reference transcript location', failures);
+assertContains(compactSkill, /lastCompactedAt/, 'compact skill must track last compaction time', failures);
+assertContains(compactSkill, /NEVER include raw sensitive data/, 'compact skill must prohibit sensitive data', failures);
+assertNotContains(compactSkill, /observation-gate/, 'compact skill must not reference observation-gate (removed)', failures);
+assertNotContains(compactSkill, /sessions\/\*\.jsonl/, 'compact skill must not reference session JSONL buffers (removed)', failures);
 
 // --- recommend skill ---
 
@@ -191,5 +188,4 @@ if (failures.length > 0) {
   process.exit(1);
 }
 
-console.log('[OK] skillers validation passed (' + requiredFiles.length + ' files, ' +
-  (requiredFiles.length + 30) + '+ assertions)');
+console.log('[OK] skillers validation passed (' + requiredFiles.length + ' files, ' + assertionCount + ' assertions)');

@@ -1,17 +1,17 @@
 ---
 name: compact
-description: "Compact raw skillers observation buffers into themed knowledge files. Use when compacting session data into weighted patterns."
-version: 0.1.0
-argument-hint: "--scope=repo|global|both --state-dir=PATH"
+description: "Compact conversation transcripts into themed knowledge files. Use when compacting transcript data into weighted patterns."
+version: 0.2.0
+argument-hint: "--scope=repo|global|both --state-dir=PATH --days=N"
 ---
 
 # compact
 
-Compact raw observation buffers into structured, weighted knowledge files.
+Extract workflow patterns from conversation transcripts and compact into structured, weighted knowledge files.
 
 ## When to Use
 
-Invoked by the `skillers-compactor` agent during `/skillers compact` or at session end. Also usable standalone for manual compaction.
+Invoked by the `skillers-compactor` agent during `/skillers compact`. Also usable standalone for manual compaction.
 
 ## Arguments
 
@@ -19,8 +19,30 @@ Parse from `$ARGUMENTS`:
 
 | Flag | Values | Default | Description |
 |---|---|---|---|
-| `--scope` | repo, global, both | repo | Which observation scope to compact |
+| `--scope` | repo, global, both | global | Which knowledge scope to write to |
 | `--state-dir` | path | (from platform) | Override state directory |
+| `--days` | number | 7 | How many days of transcripts to analyze |
+
+## Data Source
+
+Conversation transcripts are saved by Claude Code at:
+
+```
+~/.claude/projects/{project-hash}/{session-id}.jsonl
+```
+
+The project hash is derived from the CWD with path separators replaced by dashes. Each transcript is a JSONL file with entries of type: `user`, `assistant`, `system`, `progress`, `file-history-snapshot`.
+
+Relevant entry format:
+```json
+{
+  "type": "user",
+  "message": { "role": "user", "content": "the user message" },
+  "timestamp": "2026-03-09T14:25:05.135Z",
+  "sessionId": "uuid",
+  "cwd": "/path/to/project"
+}
+```
 
 ## Workflow
 
@@ -29,44 +51,73 @@ Parse from `$ARGUMENTS`:
 ```javascript
 const os = require('os');
 const path = require('path');
+const fs = require('fs');
 
 const STATE_DIR = process.env.AI_STATE_DIR || '.claude';
-const scope = args.scope || 'repo';
+const scope = args.scope || 'global';
+const days = args.days || 7;
 
-const paths = [];
-if (scope === 'repo' || scope === 'both') {
-  paths.push(path.join(process.cwd(), STATE_DIR, 'skillers'));
-}
-if (scope === 'global' || scope === 'both') {
-  paths.push(path.join(os.homedir(), STATE_DIR, 'skillers'));
-}
+// Knowledge output directories
+const globalDir = path.join(os.homedir(), STATE_DIR, 'skillers', 'knowledge');
+const repoDir = path.join(process.cwd(), STATE_DIR, 'skillers', 'knowledge');
+const knowledgeDirs = scope === 'both' ? [globalDir, repoDir]
+  : scope === 'global' ? [globalDir] : [repoDir];
+
+// Transcript source directory
+const projectsDir = path.join(os.homedir(), '.claude', 'projects');
 ```
 
-### Phase 2: Read Raw Observations
+### Phase 2: Find and Read Transcripts
 
-For each state path:
+1. List directories under `~/.claude/projects/`
+2. For each project directory, find `.jsonl` transcript files
+3. Filter by modification time: only files modified within the last `--days` days
+4. Read the skillers config to check `lastCompactedAt` - skip transcripts older than this
+5. For each transcript file:
+   - Read line by line (JSONL format, UTF-8)
+   - Extract entries with `type: "user"` - these contain the user's requests
+   - Extract entries with `type: "assistant"` - these contain tool usage patterns
+   - Record the session ID and timestamp
 
-1. Glob for `sessions/*.jsonl` files
-2. Read each file line by line
-3. Parse each line as JSON, skip malformed lines
-4. Collect all observations into an array
+### Phase 3: Extract Observations
 
-Each observation has the shape:
+For each transcript, analyze the conversation to identify:
+
+| Type | Signal | Example |
+|---|---|---|
+| `pain` | User expresses frustration, mentions something failing, retries | "this broke again", "why does X keep happening" |
+| `repeat` | User asks for the same type of task across sessions | "run tests", "check CI", "create PR" |
+| `task` | User works on a recurring task type | "refactor auth", "update docs", "fix flaky test" |
+| `wish` | User expresses desire for automation or tooling | "I wish this was automatic", "there should be a command for this" |
+| `workflow` | User follows a consistent multi-step pattern | "first X, then Y, then Z" every time |
+
+For each identified pattern, create an observation:
 ```json
-{"ts": "ISO timestamp", "t": "pain|repeat|task|wish|workflow", "v": "5 word description", "ctx": "file or area"}
+{"ts": "ISO timestamp", "t": "pain|repeat|task|wish|workflow", "v": "5 word description", "ctx": "file or area", "session": "session-id"}
 ```
 
-### Phase 3: Cluster by Theme
+**Critical**: Extract observations based on actual conversation content. Focus on:
+- Tasks the user performs repeatedly across different sessions
+- Pain points expressed through retries, frustration, or workarounds
+- Multi-step workflows that follow the same sequence
+- Explicit wishes for automation
+
+**Do NOT create observations for**:
+- One-off tasks that won't recur
+- Normal productive work without friction
+- Sensitive data (API keys, passwords, credentials, PII)
+
+### Phase 4: Cluster by Theme
 
 Group observations by semantic similarity:
 
 1. **Extract tokens** from `v` and `ctx` fields (lowercase, split on spaces and path separators)
 2. **Build token frequency map** across all observations
 3. **Cluster using shared tokens** - observations sharing 2+ tokens belong to the same cluster
-4. **Name each cluster** using its top 2-3 tokens joined with hyphens (e.g., "auth-token-refresh")
+4. **Name each cluster** using its top 2-3 tokens joined with hyphens (e.g., "ci-pr-workflow")
 5. **Merge small clusters** (fewer than 3 observations) into the nearest larger cluster or into an "uncategorized" theme
 
-### Phase 4: Calculate Weights
+### Phase 5: Calculate Weights
 
 For each theme cluster, calculate a composite weight:
 
@@ -86,7 +137,7 @@ function calculateWeight(observations) {
   const recency = recencyScores.reduce((a, b) => a + b, 0) / observations.length;
 
   // Cross-session: patterns across multiple sessions weigh disproportionately more
-  const sessions = new Set(observations.map(obs => obs.ts.split('T')[0]));
+  const sessions = new Set(observations.map(obs => obs.session));
   const crossSession = Math.min(sessions.size / 5, 1.0); // Cap at 5 sessions
 
   // Pain intensity: "pain" and "wish" types weigh more
@@ -105,7 +156,7 @@ Weight components:
 - **Cross-session (40%)**: Patterns spanning multiple sessions are the strongest signal
 - **Pain boost**: Patterns tagged as "pain" or "wish" get up to 50% boost
 
-### Phase 5: Merge with Existing Knowledge
+### Phase 6: Merge with Existing Knowledge
 
 For each theme:
 
@@ -120,31 +171,38 @@ For each theme:
 Knowledge file format:
 ```json
 {
-  "theme": "auth-token-refresh",
+  "theme": "ci-pr-workflow",
   "weight": 0.82,
   "observations": [
-    {"ts": "...", "t": "pain", "v": "auth token refresh again", "ctx": "src/auth"},
-    {"ts": "...", "t": "repeat", "v": "run tests after auth", "ctx": "tests/auth"}
+    {"ts": "...", "t": "repeat", "v": "create PR check CI", "ctx": "github", "session": "abc"},
+    {"ts": "...", "t": "workflow", "v": "merge after CI pass", "ctx": "github", "session": "def"}
   ],
   "sessions": 8,
   "firstSeen": "2026-02-15T...",
   "lastSeen": "2026-03-09T...",
   "totalOccurrences": 23,
-  "typeCounts": {"pain": 9, "repeat": 7, "task": 4, "wish": 2, "workflow": 1}
+  "typeCounts": {"pain": 2, "repeat": 12, "task": 4, "wish": 1, "workflow": 4}
 }
 ```
 
-### Phase 6: Prune
+### Phase 7: Prune
 
 Remove entries that are:
 - Older than 90 days AND weight < 0.1
 - Single occurrence AND older than 30 days
 
-### Phase 7: Archive Processed Sessions
+### Phase 8: Update Config
 
-After successful compaction:
-1. Move processed `.jsonl` files to `sessions/archived/`
-2. Or delete if archive is not needed (configurable)
+After successful compaction, update the skillers config:
+
+```json
+{
+  "lastCompactedAt": "2026-03-09T22:30:00.000Z",
+  "lastTranscriptsProcessed": ["session-id-1", "session-id-2"]
+}
+```
+
+This prevents re-processing the same transcripts on next compact.
 
 ## Output Format
 
@@ -152,22 +210,27 @@ Return JSON summary to the calling agent:
 
 ```json
 {
-  "sessionsProcessed": 3,
-  "observationsProcessed": 47,
+  "transcriptsProcessed": 5,
+  "observationsExtracted": 47,
   "themesUpdated": 2,
   "themesCreated": 1,
   "themesPruned": 0,
   "themes": [
-    {"name": "auth-patterns", "weight": 0.82, "observations": 23},
-    {"name": "testing-workflow", "weight": 0.65, "observations": 15}
+    {"name": "ci-pr-workflow", "weight": 0.82, "observations": 23},
+    {"name": "testing-patterns", "weight": 0.65, "observations": 15}
   ]
 }
 ```
 
 ## Constraints
 
+- MUST read conversation transcripts, not session JSONL buffers
 - MUST handle malformed JSONL lines gracefully (skip, log warning)
-- MUST not lose data - archive before deleting
 - MUST deduplicate observations by timestamp when merging
 - MUST cap theme name length at 40 characters
+- MUST update lastCompactedAt after successful compaction
+- MUST skip transcripts already processed (check lastCompactedAt)
 - NEVER include raw sensitive data in knowledge files
+- NEVER create observations from one-off tasks
+- NEVER read more than 20 transcripts at once (cap for token efficiency)
+- NEVER read more than 500 lines from a single transcript - sample the first 200 and last 300 lines for long sessions
