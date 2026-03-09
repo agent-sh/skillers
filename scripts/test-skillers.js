@@ -115,7 +115,7 @@ if (hooksJson) {
 
 const command = read('commands/skillers.md');
 assertContains(command, /on\|off\|show\|compact\|recommend/, 'command must support all 5 subcommands', failures);
-assertContains(command, /--scope/, 'command must support scope flag', failures);
+assertContains(command, /--scope=repo\|global\|both/, 'command must support scope flag with all values', failures);
 assertContains(command, /subagent_type/, 'command must spawn subagents for compact/recommend', failures);
 assertContains(command, /AskUserQuestion/, 'command must use AskUserQuestion for recommendations', failures);
 assertContains(command, /multiSelect/, 'command must support multi-select for recommendations', failures);

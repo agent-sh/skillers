@@ -137,7 +137,7 @@ function calculateWeight(observations) {
   const recency = recencyScores.reduce((a, b) => a + b, 0) / observations.length;
 
   // Cross-session: patterns across multiple sessions weigh disproportionately more
-  const sessions = new Set(observations.map(obs => obs.session || obs.ts.split('T')[0]));
+  const sessions = new Set(observations.map(obs => obs.session));
   const crossSession = Math.min(sessions.size / 5, 1.0); // Cap at 5 sessions
 
   // Pain intensity: "pain" and "wish" types weigh more
