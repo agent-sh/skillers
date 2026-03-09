@@ -1,0 +1,22 @@
+{
+  "name": "skillers",
+  "description": "Learn from your workflow patterns and suggest skills, hooks, and agents to automate repetitive work",
+  "version": "0.1.0",
+  "owner": {
+    "name": "Avi Fenesh",
+    "url": "https://github.com/avifenesh"
+  },
+  "repository": "https://github.com/agent-sh/skillers",
+  "keywords": [
+    "skillers"
+  ],
+  "plugins": [
+    {
+      "name": "skillers",
+      "source": ".",
+      "description": "Learn from your workflow patterns and suggest skills, hooks, and agents to automate repetitive work",
+      "version": "0.1.0",
+      "category": "productivity"
+    }
+  ]
+}

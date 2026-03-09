@@ -1,0 +1,15 @@
+{
+  "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node hooks/observation-gate.js",
+            "timeout": 5000
+          }
+        ]
+      }
+    ]
+  }
+}

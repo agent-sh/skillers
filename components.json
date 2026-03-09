@@ -1,0 +1,13 @@
+{
+  "agents": [
+    "skillers-compactor",
+    "skillers-recommender"
+  ],
+  "skills": [
+    "compact",
+    "recommend"
+  ],
+  "commands": [
+    "skillers"
+  ]
+}
