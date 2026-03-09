@@ -1,6 +1,6 @@
 ---
 name: recommend
-description: "Analyze accumulated skillers knowledge and suggest skills, hooks, and agents. Checks existing ecosystem before recommending."
+description: "Analyze accumulated skillers knowledge and suggest skills, hooks, and agents. Use when compacting is done and patterns need classification. Checks existing ecosystem before recommending."
 version: 0.1.0
 argument-hint: "--scope=repo|global|both --state-dir=PATH"
 ---
