@@ -32,7 +32,7 @@ Parse from `$ARGUMENTS`:
 
 | Flag | Values | Default | Description |
 |---|---|---|---|
-| `--scope` | repo, global, both | repo | Where to track observations |
+| `--scope` | repo, global, both | global | Where to track observations |
 | `--threshold` | number (bytes) | 10240 | Buffer size before offering compaction |
 
 ## Platform State Directory
@@ -50,7 +50,7 @@ const STATE_DIR = process.env.AI_STATE_DIR || '.claude';
 ```javascript
 const args = '$ARGUMENTS'.trim().split(/\s+/).filter(Boolean);
 const subcommand = args.find(a => ['on', 'off', 'show', 'compact', 'recommend'].includes(a)) || 'show';
-const scope = (args.find(a => a.startsWith('--scope=')) || '--scope=repo').split('=')[1];
+const scope = (args.find(a => a.startsWith('--scope=')) || '--scope=global').split('=')[1];
 const threshold = parseInt((args.find(a => a.startsWith('--threshold=')) || '--threshold=10240').split('=')[1], 10);
 ```
 
