@@ -1,6 +1,6 @@
 {
   "name": "@agentsys/skillers",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Learn from your workflow patterns and suggest skills, hooks, and agents to automate repetitive work",
   "author": {
     "name": "Avi Fenesh",
@@ -13,8 +13,8 @@
     "url": "https://github.com/agent-sh/skillers.git"
   },
   "scripts": {
-    "test": "node scripts/test-observation-hook.js",
-    "validate": "node scripts/test-observation-hook.js"
+    "test": "node scripts/test-skillers.js",
+    "validate": "node scripts/test-skillers.js"
   },
   "homepage": "https://github.com/agent-sh/skillers",
   "keywords": [

@@ -19,7 +19,7 @@ Parse from `$ARGUMENTS`:
 
 | Flag | Values | Default | Description |
 |---|---|---|---|
-| `--scope` | repo, global, both | repo | Which knowledge scope to analyze |
+| `--scope` | repo, global, both | global | Which knowledge scope to analyze |
 | `--state-dir` | path | (from platform) | Override state directory |
 
 ## Workflow

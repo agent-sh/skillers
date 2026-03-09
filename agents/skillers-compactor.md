@@ -47,22 +47,7 @@ Args: --scope={scope} --state-dir={stateDir} --days={days}
 
 ### 3. Execute Compaction
 
-Follow the skill's instructions to:
-
-1. Find conversation transcripts under `~/.claude/projects/`
-2. Filter to recent transcripts (within --days window, after lastCompactedAt)
-3. Read each transcript (JSONL format with user/assistant/system entries)
-4. Analyze conversations to extract observations:
-   - **pain**: user frustration, retries, things breaking repeatedly
-   - **repeat**: same task type across sessions (run tests, check CI, create PR)
-   - **task**: recurring task categories (refactor, fix flaky test, update docs)
-   - **wish**: user desires automation or tooling
-   - **workflow**: consistent multi-step patterns (first X, then Y, then Z)
-5. Cluster observations by theme using shared tokens
-6. Calculate weights per theme using the skill's formulas
-7. Read existing `knowledge/*.json` files
-8. Merge new observations into existing themes or create new theme files
-9. Update skillers config with lastCompactedAt
+Follow the compact skill's workflow phases exactly. The skill defines all steps: transcript discovery, filtering, observation extraction, clustering, weighting, merging, pruning, and config update.
 
 ### 4. Return Summary
 

@@ -1,6 +1,6 @@
 ---
 name: compact
-description: "Compact conversation transcripts into themed knowledge files. Use when compacting session data into weighted patterns."
+description: "Compact conversation transcripts into themed knowledge files. Use when compacting transcript data into weighted patterns."
 version: 0.2.0
 argument-hint: "--scope=repo|global|both --state-dir=PATH --days=N"
 ---
@@ -57,10 +57,11 @@ const STATE_DIR = process.env.AI_STATE_DIR || '.claude';
 const scope = args.scope || 'global';
 const days = args.days || 7;
 
-// Knowledge output directory
-const knowledgeDir = scope === 'global'
-  ? path.join(os.homedir(), STATE_DIR, 'skillers', 'knowledge')
-  : path.join(process.cwd(), STATE_DIR, 'skillers', 'knowledge');
+// Knowledge output directories
+const globalDir = path.join(os.homedir(), STATE_DIR, 'skillers', 'knowledge');
+const repoDir = path.join(process.cwd(), STATE_DIR, 'skillers', 'knowledge');
+const knowledgeDirs = scope === 'both' ? [globalDir, repoDir]
+  : scope === 'global' ? [globalDir] : [repoDir];
 
 // Transcript source directory
 const projectsDir = path.join(os.homedir(), '.claude', 'projects');
@@ -232,3 +233,4 @@ Return JSON summary to the calling agent:
 - NEVER include raw sensitive data in knowledge files
 - NEVER create observations from one-off tasks
 - NEVER read more than 20 transcripts at once (cap for token efficiency)
+- NEVER read more than 500 lines from a single transcript - sample the first 200 and last 300 lines for long sessions

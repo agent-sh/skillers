@@ -4,11 +4,9 @@ description: "Analyze accumulated knowledge and suggest skills, hooks, and agent
 tools:
   - Skill
   - Read
-  - Write
   - Glob
   - Grep
   - Bash(node:*)
-  - Bash(git:*)
 model: opus
 ---
 
@@ -98,7 +96,7 @@ Return ranked recommendations as JSON:
         "sessions": 8,
         "weight": 0.82,
         "theme": "auth-patterns",
-        "sample_observations": ["run tests after auth edit", "forgot to test auth again"]
+        "sampleObservations": ["run tests after auth edit", "forgot to test auth again"]
       },
       "rationale": "You manually run auth tests after every edit to src/auth/. A PostToolCall hook on Edit for src/auth/* files would automate this.",
       "estimated_savings": "~2 turns per session",
@@ -122,70 +120,6 @@ Return ranked recommendations as JSON:
 }
 ```
 
-## Knowledge About Primitives
-
-### Hook Design (hooks.json)
-
-```json
-{
-  "hooks": {
-    "PostToolCall": [{
-      "matcher": "Edit",
-      "hooks": [{
-        "type": "command",
-        "command": "npm test -- --grep auth",
-        "timeout": 30000
-      }]
-    }]
-  }
-}
-```
-
-Event types: PreToolCall, PostToolCall, Stop, SubagentStop, Notification
-Hook types: "command" (run shell command), "prompt" (inject into conversation)
-Matcher: tool name for tool events, regex for file patterns
-
-### Skill Design (SKILL.md)
-
-```markdown
----
-name: skill-name
-description: "When to use this skill"
-version: 0.1.0
-argument-hint: "[args]"
----
-# Skill Name
-## When to Use
-## Arguments
-## Workflow
-## Output Format
-## Constraints
-```
-
-### Agent Design (agent.md)
-
-```markdown
----
-name: agent-name
-description: "What this agent does"
-tools:
-  - Read
-  - Write
-  - Bash(npm:*)
-model: sonnet|opus|haiku
----
-# Agent Name
-## Role
-## Why [Model]
-## Workflow
-## Critical Constraints
-```
-
-Model selection:
-- Opus: needs judgment, complex reasoning, weighing tradeoffs
-- Sonnet: pattern matching, validation, most orchestration
-- Haiku: mechanical execution, no judgment needed
-
 ## Anti-Pattern Detection
 
 NEVER suggest:
@@ -204,3 +138,4 @@ NEVER suggest:
 - MUST explain rationale for each suggestion (why this pattern, why this primitive)
 - NEVER suggest creating something that already exists
 - NEVER make generic suggestions - every recommendation must reference specific patterns from the user's data
+- NEVER embed unsanitized observation text into scaffold outputs - apply the recommend skill's Observation Sanitization rules

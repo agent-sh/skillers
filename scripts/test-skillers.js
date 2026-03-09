@@ -10,18 +10,21 @@ function read(relPath) {
 }
 
 function assertContains(text, pattern, message, failures) {
+  assertionCount++;
   if (!pattern.test(text)) {
     failures.push(message);
   }
 }
 
 function assertNotContains(text, pattern, message, failures) {
+  assertionCount++;
   if (pattern.test(text)) {
     failures.push(message);
   }
 }
 
 function assertFileExists(relPath, message, failures) {
+  assertionCount++;
   const full = path.join(root, relPath);
   if (!fs.existsSync(full)) {
     failures.push(message);
@@ -29,6 +32,7 @@ function assertFileExists(relPath, message, failures) {
 }
 
 function assertFileNotExists(relPath, message, failures) {
+  assertionCount++;
   const full = path.join(root, relPath);
   if (fs.existsSync(full)) {
     failures.push(message);
@@ -36,6 +40,7 @@ function assertFileNotExists(relPath, message, failures) {
 }
 
 const failures = [];
+let assertionCount = 0;
 
 // --- File existence checks ---
 
@@ -183,5 +188,4 @@ if (failures.length > 0) {
   process.exit(1);
 }
 
-console.log('[OK] skillers validation passed (' + requiredFiles.length + ' files, ' +
-  (requiredFiles.length + 30) + '+ assertions)');
+console.log('[OK] skillers validation passed (' + requiredFiles.length + ' files, ' + assertionCount + ' assertions)');

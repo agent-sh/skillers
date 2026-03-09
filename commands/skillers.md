@@ -1,5 +1,5 @@
 ---
-description: Learn from your workflow patterns and suggest skills, hooks, and agents. Toggle observation on/off, compact observations, or get recommendations.
+description: Learn from your workflow patterns and suggest skills, hooks, and agents. Enable or disable pattern learning, analyze transcripts, or get recommendations.
 codex-description: 'Use when user asks to "skillers on", "skillers off", "learn my patterns", "suggest skills", "what should I automate", "skillers recommend", "skillers compact", "skillers show". Observes workflow patterns and suggests automation.'
 argument-hint: "on|off|show|compact|recommend [--scope=repo|global|both] [--days=N]"
 allowed-tools: Read, Write, Bash(node:*), Bash(git:*), Task, Skill, AskUserQuestion, Glob
