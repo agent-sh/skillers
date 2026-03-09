@@ -1,7 +1,7 @@
 ---
 description: Learn from your workflow patterns and suggest skills, hooks, and agents. Analyze transcripts or get recommendations.
 codex-description: 'Use when user asks to "learn my patterns", "suggest skills", "what should I automate", "skillers recommend", "skillers compact", "skillers show". Analyzes workflow patterns and suggests automation.'
-argument-hint: "show|compact|recommend [--scope=repo|global|both] [--days=N]"
+argument-hint: "show|compact|recommend [--scope=repo|global|both | --global | --repo] [--days=N]"
 allowed-tools: Read, Write, Bash(node:*), Bash(git:*), Task, Skill, AskUserQuestion, Glob
 ---
 
@@ -156,7 +156,7 @@ For each selected recommendation:
 
 | Error | Response |
 |---|---|
-| No config found (show/recommend) | `[WARN] No knowledge yet. Run /skillers compact first` |
+| No config found (show/recommend) | `[WARN] Skillers not initialized. Run /skillers compact to get started.` |
 | No transcripts found (compact) | `[OK] No conversation transcripts found` |
 | Empty knowledge (recommend) | `[WARN] Not enough data yet. Run /skillers compact first` |
 | Subagent failure | `[ERROR] {agent} failed: {error}. Try running /skillers compact manually` |
