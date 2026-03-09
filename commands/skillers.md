@@ -50,7 +50,8 @@ const STATE_DIR = process.env.AI_STATE_DIR || '.claude';
 ```javascript
 const args = '$ARGUMENTS'.trim().split(/\s+/).filter(Boolean);
 const subcommand = args.find(a => ['on', 'off', 'show', 'compact', 'recommend'].includes(a)) || 'show';
-const scope = (args.find(a => a.startsWith('--scope=')) || '--scope=global').split('=')[1];
+const scopeFlag = args.find(a => a.startsWith('--scope='));
+const scope = scopeFlag ? scopeFlag.split('=')[1] : args.includes('--global') ? 'global' : args.includes('--repo') ? 'repo' : 'global';
 const threshold = parseInt((args.find(a => a.startsWith('--threshold=')) || '--threshold=10240').split('=')[1], 10);
 ```
 
