@@ -4,42 +4,41 @@ Learn from your workflow patterns and suggest skills, hooks, and agents to autom
 
 ## How It Works
 
-1. `/skillers on` - Enable observation (repo, global, or both scope)
-2. Work normally - skillers quietly notes pain points, repeated patterns, and workflow themes
-3. `/skillers compact` - Process raw observations into weighted knowledge
+1. `/skillers on` - Enable pattern learning (repo, global, or both scope)
+2. Work normally - Claude Code saves conversation transcripts automatically
+3. `/skillers compact` - Analyze transcripts and extract recurring patterns into weighted knowledge
 4. `/skillers recommend` - Get actionable suggestions for automation
 
 ## Commands
 
 | Command | Description |
 |---|---|
-| `/skillers on [--scope=repo\|global\|both]` | Enable observation |
-| `/skillers off` | Disable observation |
-| `/skillers show` | Show status, stats, and recent observations |
-| `/skillers compact` | Compact observations into knowledge themes |
+| `/skillers on [--scope=repo\|global\|both]` | Enable pattern learning |
+| `/skillers off` | Disable |
+| `/skillers show` | Show status, transcript stats, and knowledge themes |
+| `/skillers compact [--days=N]` | Analyze transcripts and extract patterns |
 | `/skillers recommend` | Suggest skills, hooks, and agents to create |
 
-## What It Observes
+## What It Finds
 
 - Pain points ("this auth flow is broken again")
 - Repeated requests ("run tests after editing auth/")
 - Task themes ("refactoring the login module")
 - Wishes ("I wish the AI knew our API patterns")
+- Workflow sequences (multi-step patterns you follow consistently)
 
-## What It Does NOT Observe
+## What It Ignores
 
 - API keys, passwords, or secrets
-- Mechanical tool calls without semantic meaning
-- Content of files you edit
+- One-off tasks that won't recur
+- Normal productive work without friction
 
 ## Architecture
 
 ```
-Stop hook (prompt injection, ~40 tokens/turn)
-  ↓ self-filtered (only logs notable turns)
-Raw session buffer (.jsonl)
-  ↓ /skillers compact (subagent, no context theft)
-Knowledge themes (weighted JSON)
+Conversation transcripts (~/.claude/projects/)
+  ↓ /skillers compact (subagent, batch analysis)
+Knowledge themes (weighted JSON, frequency + recency + cross-session)
   ↓ /skillers recommend (subagent, ecosystem-aware)
 Ranked suggestions → user picks → scaffold via existing tools
 ```
