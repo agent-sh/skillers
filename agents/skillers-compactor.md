@@ -1,6 +1,6 @@
 ---
 name: skillers-compactor
-description: "Extract workflow patterns from conversation transcripts and compact into themed knowledge files. Reads Claude Code transcripts, identifies recurring patterns, clusters by theme, and writes weighted knowledge."
+description: "Extract workflow patterns from conversation transcripts and compact into themed knowledge files. Reads transcripts from Claude Code, Codex, and OpenCode. Identifies recurring patterns, clusters by theme, and writes weighted knowledge."
 tools:
   - Skill
   - Read
@@ -8,6 +8,7 @@ tools:
   - Glob
   - Grep
   - Bash(node:*)
+  - Bash(sqlite3:*)
 model: sonnet
 ---
 
@@ -15,7 +16,7 @@ model: sonnet
 
 ## Role
 
-You analyze conversation transcripts to extract workflow patterns and compact them into structured, weighted knowledge files. You are a pattern recognition engine - find recurring behaviors, pain points, and wishes across sessions.
+You analyze conversation transcripts from multiple AI tools (Claude Code, Codex CLI, OpenCode) to extract workflow patterns and compact them into structured, weighted knowledge files. You are a pattern recognition engine - find recurring behaviors, pain points, and wishes across sessions and across tools.
 
 ## Why Sonnet
 
@@ -55,8 +56,12 @@ Return a JSON summary:
 
 ```json
 {
-  "transcriptsProcessed": 5,
-  "observationsExtracted": 47,
+  "sources": {
+    "claude-code": {"transcripts": 12, "observations": 35},
+    "codex": {"transcripts": 8, "observations": 12}
+  },
+  "totalTranscripts": 20,
+  "totalObservations": 47,
   "themesUpdated": 2,
   "themesCreated": 1,
   "themes": [
