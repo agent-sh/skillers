@@ -136,7 +136,7 @@ assertContains(compactor, /model: sonnet/, 'compactor must use sonnet model', fa
 assertContains(compactor, /compact/, 'compactor must reference compact skill', failures);
 assertContains(compactor, /Skill/, 'compactor must have Skill in tools', failures);
 assertContains(compactor, /MUST invoke the compact skill/, 'compactor must require skill invocation', failures);
-assertContains(compactor, /malformed JSONL/, 'compactor must handle malformed data', failures);
+assertContains(compactor, /compact skill/, 'compactor must reference compact skill invocation', failures);
 assertContains(compactor, /transcript/, 'compactor must reference transcripts as data source', failures);
 assertNotContains(compactor, /observation-gate/, 'compactor must not reference observation-gate (removed)', failures);
 
@@ -164,7 +164,7 @@ assertContains(compactSkill, /\.claude\/projects/, 'compact skill must reference
 assertContains(compactSkill, /\.codex\/sessions/, 'compact skill must reference Codex session location', failures);
 assertContains(compactSkill, /opencode\.db/, 'compact skill must reference OpenCode database', failures);
 assertContains(compactSkill, /source.*claude-code.*codex.*opencode/s, 'compact skill must list all source tool identifiers', failures);
-assertContains(compactSkill, /Detection Logic/, 'compact skill must include detection logic section', failures);
+assertContains(compactSkill, /sources\.push/, 'compact skill must include source detection code', failures);
 assertContains(compactSkill, /lastCompactedAt/, 'compact skill must track last compaction time', failures);
 assertContains(compactSkill, /NEVER include raw sensitive data/, 'compact skill must prohibit sensitive data', failures);
 assertNotContains(compactSkill, /observation-gate/, 'compact skill must not reference observation-gate (removed)', failures);

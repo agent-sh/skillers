@@ -1,13 +1,11 @@
 ---
 name: compact
-description: "Compact conversation transcripts into themed knowledge files. Use when compacting transcript data into weighted patterns."
+description: "Compact conversation transcripts into themed knowledge files."
 version: 0.2.0
 argument-hint: "--scope=repo|global|both --state-dir=PATH --days=N"
 ---
 
 # compact
-
-Extract workflow patterns from conversation transcripts and compact into structured, weighted knowledge files.
 
 ## When to Use
 
@@ -80,38 +78,7 @@ Also available: `~/.local/state/opencode/prompt-history.jsonl` - user input hist
 
 On Windows the DB may also be at `%APPDATA%/opencode/opencode.db`.
 
-### Cursor
-
-Cursor does not store conversation history in an accessible local format. Skip this tool during compaction. If a readable format becomes available, add support here.
-
-### Kiro
-
-Kiro session storage format is not yet documented. If `~/.kiro/sessions/` or similar exists with readable files, attempt to parse them. Otherwise skip.
-
-### Detection Logic
-
-```javascript
-const sources = [];
-
-// Claude Code
-const claudeDir = path.join(os.homedir(), '.claude', 'projects');
-if (fs.existsSync(claudeDir)) sources.push({ tool: 'claude-code', type: 'jsonl', path: claudeDir });
-
-// Codex CLI
-const codexDir = path.join(os.homedir(), '.codex', 'sessions');
-if (fs.existsSync(codexDir)) sources.push({ tool: 'codex', type: 'jsonl', path: codexDir });
-
-// OpenCode (SQLite)
-const opencodePaths = [
-  path.join(os.homedir(), '.local', 'share', 'opencode', 'opencode.db'),
-  path.join(process.env.APPDATA || '', 'opencode', 'opencode.db')
-];
-for (const p of opencodePaths) {
-  if (fs.existsSync(p)) { sources.push({ tool: 'opencode', type: 'sqlite', path: p }); break; }
-}
-
-console.log(`[OK] Found ${sources.length} transcript source(s): ${sources.map(s => s.tool).join(', ')}`);
-```
+Cursor and Kiro do not store conversation history in an accessible local format. Skip during compaction.
 
 ## Workflow
 
@@ -132,7 +99,6 @@ const repoDir = path.join(process.cwd(), STATE_DIR, 'skillers', 'knowledge');
 const knowledgeDirs = scope === 'both' ? [globalDir, repoDir]
   : scope === 'global' ? [globalDir] : [repoDir];
 
-// Transcript sources (detect all installed tools)
 const sources = [];
 const claudeDir = path.join(os.homedir(), '.claude', 'projects');
 if (fs.existsSync(claudeDir)) sources.push({ tool: 'claude-code', type: 'jsonl', path: claudeDir });
@@ -192,7 +158,7 @@ For each identified pattern, create an observation:
 {"ts": "ISO timestamp", "t": "pain|repeat|task|wish|workflow", "v": "5 word description", "ctx": "file or area", "session": "session-id", "source": "claude-code|codex|opencode"}
 ```
 
-**Critical**: Extract observations based on actual conversation content. Focus on:
+Extract observations based on actual conversation content. Focus on:
 - Tasks the user performs repeatedly across different sessions
 - Pain points expressed through retries, frustration, or workarounds
 - Multi-step workflows that follow the same sequence
@@ -245,12 +211,6 @@ function calculateWeight(observations) {
   return Math.round(Math.min(raw, 1.0) * 100) / 100;
 }
 ```
-
-Weight components:
-- **Frequency (30%)**: How often this pattern appears
-- **Recency (30%)**: Newer observations weigh more (30-day half-life)
-- **Cross-session (40%)**: Patterns spanning multiple sessions are the strongest signal
-- **Pain boost**: Patterns tagged as "pain" or "wish" get up to 50% boost
 
 ### Phase 6: Merge with Existing Knowledge
 
@@ -330,7 +290,6 @@ Return JSON summary to the calling agent:
 - MUST deduplicate observations by timestamp when merging
 - MUST cap theme name length at 40 characters
 - MUST update lastCompactedAt after successful compaction
-- MUST skip transcripts already processed (check lastCompactedAt)
 - NEVER include raw sensitive data in knowledge files
 - NEVER create observations from one-off tasks
 - NEVER read more than 20 transcripts at once (cap for token efficiency)
