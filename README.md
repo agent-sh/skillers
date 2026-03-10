@@ -4,7 +4,7 @@ Learn from your workflow patterns and suggest skills, hooks, and agents to autom
 
 ## How It Works
 
-1. Work normally - Claude Code saves conversation transcripts automatically
+1. Work normally - your AI tool saves conversation transcripts automatically (Claude Code, Codex, OpenCode)
 2. `/skillers compact` - Analyze transcripts and extract recurring patterns into weighted knowledge
 3. `/skillers recommend` - Get actionable suggestions for automation
 
@@ -33,10 +33,10 @@ Learn from your workflow patterns and suggest skills, hooks, and agents to autom
 ## Architecture
 
 ```
-Conversation transcripts (~/.claude/projects/)
-  ↓ /skillers compact (subagent, batch analysis)
+Transcripts (Claude Code, Codex CLI, OpenCode)
+  ↓ /skillers compact (auto-detects installed tools)
 Knowledge themes (weighted JSON, frequency + recency + cross-session)
-  ↓ /skillers recommend (subagent, ecosystem-aware)
+  ↓ /skillers recommend (ecosystem-aware)
 Ranked suggestions → user picks → scaffold via existing tools
 ```
 

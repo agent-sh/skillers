@@ -42,12 +42,10 @@ const STATE_DIR = process.env.AI_STATE_DIR || '.claude';
 
 ## Data Source
 
-Conversation transcripts are saved automatically by Claude Code at:
-```
-~/.claude/projects/{project-hash}/{session-id}.jsonl
-```
-
-No hooks or per-turn recording needed - the transcripts are the data source.
+Reads conversation transcripts from all installed AI tools:
+- Claude Code: `~/.claude/projects/{hash}/{session}.jsonl`
+- Codex CLI: `~/.codex/sessions/{YYYY}/{MM}/{DD}/*.jsonl`
+- OpenCode: `~/.local/share/opencode/opencode.db` (SQLite)
 
 ## Execution
 
@@ -96,14 +94,10 @@ Spawn the compactor subagent:
 Task:
   subagent_type: "skillers:skillers-compactor"
   prompt: |
-    Analyze conversation transcripts and extract workflow patterns into knowledge files.
+    Compact conversation transcripts into knowledge files.
     Scope: {scope}
     State dir: {stateDir}
     Days: {days}
-    Read recent transcripts from ~/.claude/projects/,
-    identify recurring patterns (pain, repeat, task, wish, workflow),
-    cluster by theme, apply frequency and recency weighting,
-    merge into knowledge/ files.
     MUST invoke the compact skill for implementation details.
 ```
 
@@ -117,12 +111,9 @@ Spawn the recommender subagent:
 Task:
   subagent_type: "skillers:skillers-recommender"
   prompt: |
-    Analyze accumulated knowledge and suggest automations.
+    Suggest automations from accumulated knowledge.
     Scope: {scope}
     State dir: {stateDir}
-    Read all knowledge/ theme files, identify high-weight patterns,
-    classify each as hook/skill/agent, check existing ecosystem,
-    and return ranked recommendations.
     MUST invoke the recommend skill for implementation details.
 ```
 
