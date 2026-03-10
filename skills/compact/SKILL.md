@@ -23,17 +23,16 @@ Parse from `$ARGUMENTS`:
 | `--state-dir` | path | (from platform) | Override state directory |
 | `--days` | number | 7 | How many days of transcripts to analyze |
 
-## Data Source
+## Data Sources
 
-Conversation transcripts are saved by Claude Code at:
+Skillers reads conversation transcripts from multiple AI tools. Detect which tools are installed and read from all available sources.
 
-```
-~/.claude/projects/{project-hash}/{session-id}.jsonl
-```
+### Claude Code
+
+Location: `~/.claude/projects/{project-hash}/{session-id}.jsonl`
 
 The project hash is derived from the CWD with path separators replaced by dashes. Each transcript is a JSONL file with entries of type: `user`, `assistant`, `system`, `progress`, `file-history-snapshot`.
 
-Relevant entry format:
 ```json
 {
   "type": "user",
@@ -42,6 +41,76 @@ Relevant entry format:
   "sessionId": "uuid",
   "cwd": "/path/to/project"
 }
+```
+
+### Codex CLI
+
+Location: `~/.codex/sessions/{YYYY}/{MM}/{DD}/rollout-{timestamp}-{uuid}.jsonl`
+
+Sessions are organized by date. Each JSONL file starts with a `session_meta` entry, followed by `response_item` and `event_msg` entries. User messages have `type: "event_msg"` with `payload.type: "user_message"`.
+
+```json
+{"timestamp":"...","type":"session_meta","payload":{"id":"uuid","cwd":"...","cli_version":"0.77.0"}}
+{"timestamp":"...","type":"event_msg","payload":{"type":"user_message","message":"the user message"}}
+{"timestamp":"...","type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"..."}]}}
+```
+
+Also available: `~/.codex/history.jsonl` - compact log with only user inputs per session:
+```json
+{"session_id":"uuid","ts":1767723836,"text":"the user message"}
+```
+
+### OpenCode
+
+Location: `~/.local/share/opencode/opencode.db` (SQLite)
+
+Tables: `project`, `session`, `message`. Query sessions and messages with SQL.
+
+```sql
+SELECT s.id, s.slug, m.time_created, m.content
+FROM session s JOIN message m ON m.session_id = s.id
+WHERE m.time_created > {cutoff_timestamp}
+ORDER BY m.time_created;
+```
+
+Also available: `~/.local/state/opencode/prompt-history.jsonl` - user input history only:
+```json
+{"input":"the user message","parts":[],"mode":"normal"}
+```
+
+On Windows the DB may also be at `%APPDATA%/opencode/opencode.db`.
+
+### Cursor
+
+Cursor does not store conversation history in an accessible local format. Skip this tool during compaction. If a readable format becomes available, add support here.
+
+### Kiro
+
+Kiro session storage format is not yet documented. If `~/.kiro/sessions/` or similar exists with readable files, attempt to parse them. Otherwise skip.
+
+### Detection Logic
+
+```javascript
+const sources = [];
+
+// Claude Code
+const claudeDir = path.join(os.homedir(), '.claude', 'projects');
+if (fs.existsSync(claudeDir)) sources.push({ tool: 'claude-code', type: 'jsonl', path: claudeDir });
+
+// Codex CLI
+const codexDir = path.join(os.homedir(), '.codex', 'sessions');
+if (fs.existsSync(codexDir)) sources.push({ tool: 'codex', type: 'jsonl', path: codexDir });
+
+// OpenCode (SQLite)
+const opencodePaths = [
+  path.join(os.homedir(), '.local', 'share', 'opencode', 'opencode.db'),
+  path.join(process.env.APPDATA || '', 'opencode', 'opencode.db')
+];
+for (const p of opencodePaths) {
+  if (fs.existsSync(p)) { sources.push({ tool: 'opencode', type: 'sqlite', path: p }); break; }
+}
+
+console.log(`[OK] Found ${sources.length} transcript source(s): ${sources.map(s => s.tool).join(', ')}`);
 ```
 
 ## Workflow
@@ -63,21 +132,48 @@ const repoDir = path.join(process.cwd(), STATE_DIR, 'skillers', 'knowledge');
 const knowledgeDirs = scope === 'both' ? [globalDir, repoDir]
   : scope === 'global' ? [globalDir] : [repoDir];
 
-// Transcript source directory
-const projectsDir = path.join(os.homedir(), '.claude', 'projects');
+// Transcript sources (detect all installed tools)
+const sources = [];
+const claudeDir = path.join(os.homedir(), '.claude', 'projects');
+if (fs.existsSync(claudeDir)) sources.push({ tool: 'claude-code', type: 'jsonl', path: claudeDir });
+const codexDir = path.join(os.homedir(), '.codex', 'sessions');
+if (fs.existsSync(codexDir)) sources.push({ tool: 'codex', type: 'jsonl', path: codexDir });
+const opencodePaths = [
+  path.join(os.homedir(), '.local', 'share', 'opencode', 'opencode.db'),
+  path.join(process.env.APPDATA || '', 'opencode', 'opencode.db')
+];
+for (const p of opencodePaths) {
+  if (fs.existsSync(p)) { sources.push({ tool: 'opencode', type: 'sqlite', path: p }); break; }
+}
 ```
 
 ### Phase 2: Find and Read Transcripts
 
+For each detected source, collect transcripts using the appropriate method:
+
+**Claude Code** (JSONL):
 1. List directories under `~/.claude/projects/`
 2. For each project directory, find `.jsonl` transcript files
 3. Filter by modification time: only files modified within the last `--days` days
-4. Read the skillers config to check `lastCompactedAt` - skip transcripts older than this
-5. For each transcript file:
-   - Read line by line (JSONL format, UTF-8)
-   - Extract entries with `type: "user"` - these contain the user's requests
-   - Extract entries with `type: "assistant"` - these contain tool usage patterns
-   - Record the session ID and timestamp
+4. Extract entries with `type: "user"` and `type: "assistant"`
+
+**Codex CLI** (JSONL):
+1. Walk `~/.codex/sessions/{YYYY}/{MM}/{DD}/` date directories
+2. Find `.jsonl` files within the date range
+3. Extract `session_meta` for session context (cwd, cli_version)
+4. Extract `event_msg` entries with `payload.type: "user_message"` for user messages
+5. Extract `response_item` entries with `payload.role: "assistant"` for tool usage patterns
+
+**OpenCode** (SQLite):
+1. Open `opencode.db` with a SQLite reader (Bash: `sqlite3` or node `better-sqlite3`)
+2. Query sessions with messages in the date range
+3. Read message content from the `message` table joined with `session`
+4. Normalize into the same observation extraction format
+
+**Common for all sources:**
+- Read the skillers config to check `lastCompactedAt` - skip already-processed transcripts
+- Record the session ID, source tool, and timestamp for each entry
+- Tag observations with `source: "claude-code" | "codex" | "opencode"` for traceability
 
 ### Phase 3: Extract Observations
 
@@ -93,7 +189,7 @@ For each transcript, analyze the conversation to identify:
 
 For each identified pattern, create an observation:
 ```json
-{"ts": "ISO timestamp", "t": "pain|repeat|task|wish|workflow", "v": "5 word description", "ctx": "file or area", "session": "session-id"}
+{"ts": "ISO timestamp", "t": "pain|repeat|task|wish|workflow", "v": "5 word description", "ctx": "file or area", "session": "session-id", "source": "claude-code|codex|opencode"}
 ```
 
 **Critical**: Extract observations based on actual conversation content. Focus on:
@@ -174,8 +270,8 @@ Knowledge file format:
   "theme": "ci-pr-workflow",
   "weight": 0.82,
   "observations": [
-    {"ts": "...", "t": "repeat", "v": "create PR check CI", "ctx": "github", "session": "abc"},
-    {"ts": "...", "t": "workflow", "v": "merge after CI pass", "ctx": "github", "session": "def"}
+    {"ts": "...", "t": "repeat", "v": "create PR check CI", "ctx": "github", "session": "abc", "source": "claude-code"},
+    {"ts": "...", "t": "workflow", "v": "merge after CI pass", "ctx": "github", "session": "def", "source": "codex"}
   ],
   "sessions": 8,
   "firstSeen": "2026-02-15T...",
@@ -210,8 +306,13 @@ Return JSON summary to the calling agent:
 
 ```json
 {
-  "transcriptsProcessed": 5,
-  "observationsExtracted": 47,
+  "sources": {
+    "claude-code": {"transcripts": 12, "observations": 35},
+    "codex": {"transcripts": 8, "observations": 12},
+    "opencode": {"sessions": 3, "observations": 5}
+  },
+  "totalTranscripts": 23,
+  "totalObservations": 52,
   "themesUpdated": 2,
   "themesCreated": 1,
   "themesPruned": 0,
@@ -224,8 +325,8 @@ Return JSON summary to the calling agent:
 
 ## Constraints
 
-- MUST read conversation transcripts, not session JSONL buffers
-- MUST handle malformed JSONL lines gracefully (skip, log warning)
+- MUST detect and read from all installed AI tools (Claude Code, Codex, OpenCode)
+- MUST handle malformed JSONL lines and missing DB tables gracefully (skip, log warning)
 - MUST deduplicate observations by timestamp when merging
 - MUST cap theme name length at 40 characters
 - MUST update lastCompactedAt after successful compaction

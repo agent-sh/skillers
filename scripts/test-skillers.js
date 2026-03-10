@@ -160,7 +160,11 @@ assertContains(compactSkill, /30-day half-life/, 'compact skill must specify rec
 assertContains(compactSkill, /pain.*boost/i, 'compact skill must include pain boost', failures);
 assertContains(compactSkill, /Prune/, 'compact skill must include pruning phase', failures);
 assertContains(compactSkill, /MUST handle malformed JSONL/, 'compact skill must handle malformed data', failures);
-assertContains(compactSkill, /\.claude\/projects/, 'compact skill must reference transcript location', failures);
+assertContains(compactSkill, /\.claude\/projects/, 'compact skill must reference Claude Code transcript location', failures);
+assertContains(compactSkill, /\.codex\/sessions/, 'compact skill must reference Codex session location', failures);
+assertContains(compactSkill, /opencode\.db/, 'compact skill must reference OpenCode database', failures);
+assertContains(compactSkill, /source.*claude-code.*codex.*opencode/s, 'compact skill must list all source tool identifiers', failures);
+assertContains(compactSkill, /Detection Logic/, 'compact skill must include detection logic section', failures);
 assertContains(compactSkill, /lastCompactedAt/, 'compact skill must track last compaction time', failures);
 assertContains(compactSkill, /NEVER include raw sensitive data/, 'compact skill must prohibit sensitive data', failures);
 assertNotContains(compactSkill, /observation-gate/, 'compact skill must not reference observation-gate (removed)', failures);
