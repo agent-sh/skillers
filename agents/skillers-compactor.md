@@ -29,7 +29,7 @@ Extract from prompt:
 
 ### 2. Invoke Compact Skill
 
-You MUST invoke the `compact` skill using the Skill tool. The skill is the authoritative source for:
+You MUST invoke the `skillers-compact` skill using the Skill tool. The skill is the authoritative source for:
 - Transcript location and format
 - Observation extraction criteria (pain, repeat, task, wish, workflow)
 - Clustering algorithm
@@ -38,7 +38,7 @@ You MUST invoke the `compact` skill using the Skill tool. The skill is the autho
 - Pruning rules for low-weight entries
 
 ```
-Skill: compact
+Skill: skillers-compact
 Args: --scope={scope} --state-dir={stateDir} --days={days}
 ```
 

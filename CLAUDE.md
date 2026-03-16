@@ -10,7 +10,7 @@
 
 ## Skills
 
-- compact
+- skillers-compact
 - recommend
 
 ## Commands

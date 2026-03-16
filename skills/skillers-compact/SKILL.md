@@ -1,5 +1,5 @@
 ---
-name: compact
+name: skillers-compact
 description: "Compact conversation transcripts into themed knowledge files."
 version: 0.2.0
 argument-hint: "--scope=repo|global|both --state-dir=PATH --days=N"
