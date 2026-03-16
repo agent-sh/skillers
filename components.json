@@ -4,7 +4,7 @@
     "skillers-recommender"
   ],
   "skills": [
-    "compact",
+    "skillers-compact",
     "recommend"
   ],
   "commands": [
