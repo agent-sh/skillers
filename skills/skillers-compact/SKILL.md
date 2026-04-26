@@ -140,6 +140,26 @@ For each detected source, collect transcripts using the appropriate method:
 - Read the skillers config to check `lastCompactedAt` - skip already-processed transcripts
 - Record the session ID, source tool, and timestamp for each entry
 - Tag observations with `source: "claude-code" | "codex" | "opencode"` for traceability
+- **MUST redact every raw line before parsing** using `lib/sanitize.js::redact()`
+  from the skillers plugin root. Users commonly paste API keys, GitHub tokens,
+  AWS keys, and Bearer tokens into chat; those must not enter agent context
+  or persisted knowledge files.
+
+```javascript
+const path = require('path');
+const { redact } = require(path.join(PLUGIN_ROOT, 'lib', 'sanitize'));
+
+function readJsonlSafe(filePath) {
+  const raw = fs.readFileSync(filePath, 'utf8');
+  return raw.split('\n').filter(Boolean).map(line => {
+    const safeLine = redact(line);
+    try { return JSON.parse(safeLine); } catch { return null; }
+  }).filter(Boolean);
+}
+```
+
+For OpenCode SQLite, apply `redact()` to each `message.content` string after
+fetching rows and before extracting observations.
 
 ### Phase 3: Extract Observations
 
