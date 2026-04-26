@@ -64,8 +64,46 @@ Return a JSON summary:
 }
 ```
 
+## Transcript Redaction (MANDATORY)
+
+Conversation transcripts (Claude Code JSONL, Codex rollout JSONL, OpenCode
+SQLite message rows) frequently contain credentials the user accidentally
+pasted into chat: API keys, GitHub tokens, AWS access keys, Bearer tokens,
+high-entropy secrets. Without redaction these flow unchanged into the
+compactor's context and then into persisted knowledge files under
+`{stateDir}/skillers/knowledge/`, which are often committed.
+
+**Before reading any transcript JSONL line (or SQLite message row) into your
+context or passing it to the `skillers-compact` skill, pipe the raw text
+through `lib/sanitize.js::redact()`.** Do this in the Node snippet that
+parses transcripts, not downstream during clustering - the goal is to keep
+secrets out of agent context entirely, not just out of the final output.
+
+```javascript
+const { redact } = require('./lib/sanitize');
+
+// Claude Code / Codex JSONL:
+for (const rawLine of readTranscriptLines(file)) {
+  const safeLine = redact(rawLine);
+  const entry = JSON.parse(safeLine);
+  // ... extract observations from `entry`
+}
+
+// OpenCode SQLite:
+const rows = db.prepare('SELECT content FROM message WHERE ...').all();
+for (const row of rows) {
+  const safeContent = redact(row.content);
+  // ... extract observations from `safeContent`
+}
+```
+
+The `skillers-compact` skill also documents this requirement. If you bypass
+redaction (e.g. to debug), never write the resulting observations to disk.
+
 ## Critical Constraints
 
 - MUST invoke the compact skill - do not hardcode extraction or weighting logic
 - MUST preserve existing knowledge (merge, don't overwrite)
+- MUST redact every transcript line through `lib/sanitize.js::redact()` before
+  any parsing, observation extraction, or pass-through to the compact skill
 - NEVER include sensitive data in knowledge files
