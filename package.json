@@ -1,6 +1,6 @@
 {
   "name": "@agentsys/skillers",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Learn from your workflow patterns and suggest skills, hooks, and agents to automate repetitive work",
   "author": {
     "name": "Avi Fenesh",
