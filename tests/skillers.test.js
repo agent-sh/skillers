@@ -133,6 +133,9 @@ test('extract, merge, candidates and show on fixture transcripts', () => {
     assert.equal(repo.themes[0].observations, 4, 'repo scope keeps only in-repo sessions');
     assert.ok(!fs.existsSync(digestPath), 'digest is removed after merge');
 
+    // Processed sessions are not offered again, including out-of-repo ones under --scope=both.
+    assert.match(run(fx, ['extract', '--days=2', '--scope=both']).stdout, /sessions: 0/);
+
     // Merging again does not double-count processed sessions.
     run(fx, ['extract', '--days=2', '--scope=both']);
     fs.writeFileSync(obsFile, JSON.stringify(observations.slice(0, 2)));

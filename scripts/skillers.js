@@ -323,8 +323,9 @@ function extract(opts) {
   const all = [...readClaude(sinceMs), ...readCodex(sinceMs), ...readOpenCode(sinceMs, notes)]
     .filter(s => s.messages.length > 0)
     .filter(s => !onlyRepo || isInside(s.cwd, repo.root))
-    // A session is done only when every target has processed it.
-    .filter(s => !processed.every(set => set.has(s.id)))
+    // A session is done when every target it applies to has processed it.
+    // The repo target never records sessions from outside the repo.
+    .filter(s => !tgs.every((t, i) => (t.scope === 'repo' && !isInside(s.cwd, t.root)) || processed[i].has(s.id)))
     .sort((a, b) => String(b.start || '').localeCompare(String(a.start || '')));
 
   const picked = all.slice(0, MAX_SESSIONS).map(s => ({
