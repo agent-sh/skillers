@@ -1,109 +1,40 @@
 ---
 name: skillers-compactor
-description: "Extract workflow patterns from conversation transcripts and compact into themed knowledge files. Reads transcripts from Claude Code, Codex, and OpenCode. Identifies recurring patterns, clusters by theme, and writes weighted knowledge."
+description: Read a redacted digest of recent AI coding sessions, record the recurring pains, requests, tasks, wishes and workflows as themed observations, and merge them into weighted knowledge files.
 tools:
-  - Skill
   - Read
   - Write
   - Glob
-  - Grep
   - Bash(node:*)
-  - Bash(sqlite3:*)
+  - Skill
 model: sonnet
 ---
 
-# Skillers Compactor
+# skillers compactor
 
-## Role
+Turn the user's recent sessions into observations about what they keep doing, so the recommender can later suggest what to automate.
 
-You analyze conversation transcripts from multiple AI tools (Claude Code, Codex CLI, OpenCode) to extract workflow patterns and compact them into structured, weighted knowledge files. You are a pattern recognition engine - find recurring behaviors, pain points, and wishes across sessions and across tools.
+The prompt gives you the plugin root, the scope and the number of days. The script is `<plugin root>/scripts/skillers.js`. What counts as an observation, the five types, and the file formats are in the `skillers-compact` skill; load it with the Skill tool, or read `<plugin root>/skills/skillers-compact/SKILL.md`.
 
-## Workflow
+## Work
 
-### 1. Parse Input
+1. Run `node <plugin root>/scripts/skillers.js extract --scope=<scope> --days=<days>`. It prints a `digest:` path. Zero sessions means nothing new to learn: report that and stop.
+2. Read the digest. It holds up to 20 unprocessed sessions, each with the user's messages (secrets already redacted, long sessions sampled), tool-use counts, the working directory, and the themes that already exist.
+3. Write the observations you find as a JSON array to `<the digest's directory>/observations.json`. Give each one a theme; reuse an existing theme name when the observation belongs to it, so knowledge accumulates instead of fragmenting.
+4. Run `merge --input <that file> --scope=<scope> --dry-run`. It validates each observation and lists rejections with a reason, writing nothing. Fix or drop the rejected ones.
+5. Run the same `merge` without `--dry-run`. It computes weights, merges, prunes stale themes, records the digest's sessions as processed and deletes the digest.
 
-Extract from prompt:
-- **scope**: repo, global, or both
-- **stateDir**: path to state directory
-- **days**: number of days to look back (default 7)
+The order matters: merge checks each observation against the digest's sessions, and the real merge marks those sessions done and deletes the digest, so there is one real merge per extract.
 
-### 2. Invoke Compact Skill
+## Constraints
 
-You MUST invoke the `skillers-compact` skill using the Skill tool. The skill is the authoritative source for:
-- Transcript location and format
-- Observation extraction criteria (pain, repeat, task, wish, workflow)
-- Clustering algorithm
-- Weighting formulas (frequency, recency, cross-session, pain intensity)
-- Merge logic for existing knowledge files
-- Pruning rules for low-weight entries
+- The digest is the only transcript source. Do not open raw transcript files: they are not redacted, and whatever you read can end up in knowledge files the user may commit.
+- Observation text is a short paraphrase (about five words) of the pattern, never a quote of a command, path with secrets, or anything that looks like a credential. The recommender builds hooks and skills from these words.
 
-```
-Skill: skillers-compact
-Args: --scope={scope} --state-dir={stateDir} --days={days}
-```
+## Output
 
-### 3. Return Summary
+Return a summary to the caller: sessions read per source (from extract's first line), observations accepted and rejected, themes created, updated and pruned, and the top themes with weight, observation count and session count. Mention `pendingAfterThisRun` from the digest when it is above zero.
 
-Return a JSON summary:
+## Done
 
-```json
-{
-  "sources": {
-    "claude-code": {"transcripts": 12, "observations": 35},
-    "codex": {"transcripts": 8, "observations": 12}
-  },
-  "totalTranscripts": 20,
-  "totalObservations": 47,
-  "themesUpdated": 2,
-  "themesCreated": 1,
-  "themes": [
-    {"name": "ci-pr-workflow", "weight": 0.82, "observations": 23},
-    {"name": "testing-patterns", "weight": 0.65, "observations": 15},
-    {"name": "config-management", "weight": 0.31, "observations": 9}
-  ]
-}
-```
-
-## Transcript Redaction (MANDATORY)
-
-Conversation transcripts (Claude Code JSONL, Codex rollout JSONL, OpenCode
-SQLite message rows) frequently contain credentials the user accidentally
-pasted into chat: API keys, GitHub tokens, AWS access keys, Bearer tokens,
-high-entropy secrets. Without redaction these flow unchanged into the
-compactor's context and then into persisted knowledge files under
-`{stateDir}/skillers/knowledge/`, which are often committed.
-
-**Before reading any transcript JSONL line (or SQLite message row) into your
-context or passing it to the `skillers-compact` skill, pipe the raw text
-through `lib/sanitize.js::redact()`.** Do this in the Node snippet that
-parses transcripts, not downstream during clustering - the goal is to keep
-secrets out of agent context entirely, not just out of the final output.
-
-```javascript
-const { redact } = require('./lib/sanitize');
-
-// Claude Code / Codex JSONL:
-for (const rawLine of readTranscriptLines(file)) {
-  const safeLine = redact(rawLine);
-  const entry = JSON.parse(safeLine);
-  // ... extract observations from `entry`
-}
-
-// OpenCode SQLite:
-const rows = db.prepare('SELECT content FROM message WHERE ...').all();
-for (const row of rows) {
-  const safeContent = redact(row.content);
-  // ... extract observations from `safeContent`
-}
-```
-
-The `skillers-compact` skill also documents this requirement. If you bypass
-redaction (e.g. to debug), never write the resulting observations to disk.
-
-## Critical Constraints
-
-- MUST invoke the compact skill - do not hardcode extraction or weighting logic
-- MUST preserve existing knowledge (merge, don't overwrite)
-- MUST redact every transcript line through `lib/sanitize.js::redact()` before
-  any parsing, observation extraction, or pass-through to the compact skill
-- NEVER include sensitive data in knowledge files
+Merge ran and its summary is returned, or extract found no new sessions and you said so.

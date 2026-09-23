@@ -1,154 +1,49 @@
 ---
 description: Learn from your workflow patterns and suggest skills, hooks, and agents. Analyze transcripts or get recommendations.
-codex-description: 'Use when user asks to "learn my patterns", "suggest skills", "what should I automate", "skillers recommend", "skillers compact", "skillers show". Analyzes workflow patterns and suggests automation.'
+codex-description: 'Use when the user wants to learn their own workflow patterns, asks what to automate, or runs skillers show, compact or recommend. Reads past sessions and suggests skills, hooks and agents.'
 argument-hint: "show|compact|recommend [--scope=repo|global|both | --global | --repo] [--days=N]"
 allowed-tools: Read, Write, Bash(node:*), Bash(git:*), Task, Skill, AskUserQuestion, Glob
 ---
 
-# /skillers - Workflow Pattern Learning
+# /skillers
 
-Analyze your conversation transcripts to find recurring patterns and suggest skills, hooks, and agents to automate repetitive work.
-
-## Constraints
-
-- NEVER auto-create skills/hooks/agents without user approval
-- NEVER log sensitive data (API keys, passwords, secrets)
-- MUST use subagents for compaction and recommendation (no context theft)
-- MUST respect scope setting (repo, global, or both)
-- Plain text output, no emojis
+Find what the user does over and over in their AI coding sessions and suggest the skill, hook or agent that would take it off their hands.
 
 ## Arguments
 
-Parse from `$ARGUMENTS`:
+`$ARGUMENTS`: a subcommand and optional flags.
 
-| Subcommand | Description |
+| Subcommand | Does |
 |---|---|
-| `show` | Display current config and knowledge stats (default) |
-| `compact` | Analyze transcripts and extract patterns into knowledge files |
-| `recommend` | Analyze accumulated knowledge and suggest automations |
+| `show` (default) | Status: state dir, last compaction, themes with weights, transcript counts |
+| `compact` | Read recent sessions and fold the patterns into weighted knowledge files |
+| `recommend` | Suggest automations from the accumulated knowledge |
 
-| Flag | Values | Default | Description |
-|---|---|---|---|
-| `--scope` | repo, global, both | global | Where to store knowledge |
-| `--days` | number | 7 | How many days of transcripts to analyze (compact only) |
+| Flag | Values | Default |
+|---|---|---|
+| `--scope` (or `--global`, `--repo`) | `global`, `repo`, `both` | `global` |
+| `--days` | positive number, `compact` only | `7` |
 
-## Platform State Directory
+Global knowledge lives in `~/<stateDir>/skillers/`, repo knowledge in `<repo>/<stateDir>/skillers/`, where `<stateDir>` is `$AI_STATE_DIR` or `.claude`. Repo scope only learns from sessions that ran inside the current repo.
 
-```javascript
-const STATE_DIR = process.env.AI_STATE_DIR || '.claude';
-// Repo-scoped: {CWD}/{STATE_DIR}/skillers/
-// Global: ~/{STATE_DIR}/skillers/
-```
+## The script
 
-## Data Source
+Everything deterministic is in `scripts/skillers.js`: reading Claude Code, Codex and OpenCode transcripts, redacting secrets, weighting, merging, pruning and the evidence bar. Run it as `node "${CLAUDE_PLUGIN_ROOT}/scripts/skillers.js" <command> [flags]`. In a harness that does not substitute `${CLAUDE_PLUGIN_ROOT}`, find the script in the plugin directory with Glob. Exit 2 means a bad argument: show the message and stop.
 
-Reads conversation transcripts from all installed AI tools:
-- Claude Code: `~/.claude/projects/{hash}/{session}.jsonl`
-- Codex CLI: `~/.codex/sessions/{YYYY}/{MM}/{DD}/*.jsonl`
-- OpenCode: `~/.local/share/opencode/opencode.db` (SQLite)
+## show
 
-## Execution
+Run the script's `show` with the flags and print its output as is.
 
-### Parse Subcommand
+## compact
 
-```javascript
-const args = '$ARGUMENTS'.trim().split(/\s+/).filter(Boolean);
-const subcommand = args.find(a => ['show', 'compact', 'recommend'].includes(a)) || 'show';
-const scopeFlag = args.find(a => a.startsWith('--scope='));
-const scope = scopeFlag ? scopeFlag.split('=')[1] : args.includes('--global') ? 'global' : args.includes('--repo') ? 'repo' : 'global';
-const days = parseInt((args.find(a => a.startsWith('--days=')) || '--days=7').split('=')[1], 10);
-```
+Spawn `skillers:skillers-compactor` with the plugin root, scope and days. Without the Task tool, do the same work in this session by following the plugin's `agents/skillers-compactor.md`. Show the user the summary it returns: sessions read per tool, themes created, updated and pruned, and the top themes by weight. If it reports more pending sessions, say that another `compact` will pick them up.
 
-### Subcommand: `show`
+## recommend
 
-1. Read config from repo and/or global locations
-2. Count knowledge theme files and list themes with weights
-3. Count available transcript files
-4. Show last compaction time
-5. Output:
+Spawn `skillers:skillers-recommender` with the plugin root and scope, or follow `agents/skillers-recommender.md` in this session without Task. When it returns recommendations, let the user choose which to build: AskUserQuestion with multi-select and a "Skip all" option, or a numbered list in plain text when that tool is missing.
 
-```
-Skillers Status
-  Active: yes (scope: global)
-  State dir: ~/.claude/skillers/
+Build only what the user picked, because each one changes their setup. For each pick, prefer a creation tool they already have (for example a hook or skill creator plugin) and fall back to writing the file from the recommendation's scaffold. Show the file and where it goes before writing it. If the enhance plugin is installed, offer `/enhance` on the result.
 
-Data Source
-  Transcript dirs: 5
-  Total transcripts: 23
-  Last compacted: 2026-03-09T15:00:00Z
+## Done
 
-Knowledge
-  Theme files: 2
-  Themes:
-    ci-pr-workflow (weight: 0.82, 23 observations, 8 sessions)
-    testing-patterns (weight: 0.65, 15 observations, 5 sessions)
-```
-
-### Subcommand: `compact`
-
-Auto-initialize if needed: create `{stateDir}/skillers/config.json` and `knowledge/` directory if they don't exist.
-
-Spawn the compactor subagent:
-
-```
-Task:
-  subagent_type: "skillers:skillers-compactor"
-  prompt: |
-    Compact conversation transcripts into knowledge files.
-    Scope: {scope}
-    State dir: {stateDir}
-    Days: {days}
-    MUST invoke the compact skill for implementation details.
-```
-
-After the subagent completes, show a summary of what was compacted.
-
-### Subcommand: `recommend`
-
-Spawn the recommender subagent:
-
-```
-Task:
-  subagent_type: "skillers:skillers-recommender"
-  prompt: |
-    Suggest automations from accumulated knowledge.
-    Scope: {scope}
-    State dir: {stateDir}
-    MUST invoke the recommend skill for implementation details.
-```
-
-After the subagent returns recommendations, present them via AskUserQuestion:
-
-```
-AskUserQuestion:
-  questions:
-    - header: "Suggestions"
-      question: "Which automation would you like to create?"
-      multiSelect: true
-      options:
-        - label: "[rec.type]: [rec.title truncated to 30 chars]"
-          description: "[rec.evidence summary]"
-        ...
-        - label: "Skip all"
-          description: "No automation needed right now"
-```
-
-For each selected recommendation:
-
-1. Check if the user has the relevant ecosystem tools:
-   - For hooks: check if `hookify` plugin exists, or fall back to manual scaffolding
-   - For skills: check if `skill-creator` plugin exists, or fall back to manual scaffolding
-   - For agents: scaffold manually using agentsys agent template
-2. If the ecosystem tool exists, offer to use it
-3. If not, offer to install it or scaffold manually
-4. After creation, offer to run `/enhance` to validate (if enhance plugin exists)
-
-## Error Handling
-
-| Error | Response |
-|---|---|
-| No config found (show/recommend) | `[WARN] Skillers not initialized. Run /skillers compact to get started.` |
-| No transcripts found (compact) | `[OK] No conversation transcripts found` |
-| Empty knowledge (recommend) | `[WARN] Not enough data yet. Run /skillers compact first` |
-| Subagent failure | `[ERROR] {agent} failed: {error}. Try running /skillers compact manually` |
-| Minimum evidence not met | `[OK] Patterns detected but not enough evidence yet (need 5+ occurrences across 3+ sessions)` |
+`show` printed the status. `compact` reported what changed in the knowledge files. `recommend` either built what the user picked, or said plainly why there is nothing to recommend yet (no knowledge, or no theme meets the evidence bar) and what to run next.
