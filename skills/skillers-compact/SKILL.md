@@ -17,7 +17,7 @@ Reference for turning session digests into observations. The `skillers-compactor
 - Codex CLI: `~/.codex/sessions/YYYY/MM/DD/rollout-*.jsonl`, `session_meta` for cwd, user input from `event_msg` `user_message` (older rollouts) or user `response_item` messages (newer ones), function and custom tool calls.
 - OpenCode: `~/.local/share/opencode/opencode.db` (or `%APPDATA%/opencode/opencode.db`), sessions joined with user text parts and tool parts. Needs Node 22.5 or newer for `node:sqlite`; older Node skips OpenCode with a note.
 
-Every message passes through `lib/sanitize.js` before it is written, and harness-injected context (task notifications, environment blocks, AGENTS.md preambles) is dropped. Slash commands and typed shell input stay, since they are the user's own actions. At most 20 unprocessed sessions go into one digest, newest first, each sampled to its first 20 and last 40 user messages of up to 600 characters. The rest wait for the next run.
+Every message passes through `lib/sanitize.js` before it is written, and harness-injected context (task notifications, environment blocks, AGENTS.md preambles) is dropped. Slash commands and typed shell input stay, since they are the user's own actions. Only messages newer than the session's high-water mark count. At most 20 sessions with new messages go into one digest, newest first, each sampled to its first 20 and last 40 user messages of up to 600 characters. The rest wait for the next run.
 
 ## Observations
 
@@ -45,10 +45,10 @@ Fields:
 
 For each scope target (global always gets everything; repo only gets sessions whose cwd is inside the repo), merge:
 
-- skips sessions that target already processed, dedupes on time, session, type and text, and keeps the newest 200 observations per theme;
+- skips messages at or before that target's high-water mark for the session, dedupes on time, session, type and text, and keeps the newest 200 observations per theme;
 - computes the weight: `(0.3 * frequency + 0.3 * recency + 0.4 * cross-session) * pain boost`, capped at 1, where frequency is observations / 20 (max 1), recency is the mean of a 30-day half-life decay, cross-session is distinct sessions / 5 (max 1), and the pain boost is `1 + 0.5 * (pain + wish share)`;
 - recomputes untouched themes so weights decay between runs, and deletes themes last seen over 90 days ago with weight under 0.1, or with a single observation last seen over 30 days ago;
-- writes `knowledge/<theme>.json` and records `lastCompactedAt` and the processed session ids in `config.json`.
+- writes `knowledge/<theme>.json` and records `lastCompactedAt` and, per session, the time of the last compacted message (`processedSessions`) in `config.json`. A session that continues after a compaction, including the one that ran it, contributes its newer messages next time.
 
 Knowledge file:
 

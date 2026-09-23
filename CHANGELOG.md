@@ -7,6 +7,7 @@
 - Rewrote the command, both agents and both skills for current models: goal, constraints with reasons, done criteria and the output contract. Step scripts, all-caps rule lists, a classification function and a weight function to compute by hand are gone.
 - The deterministic work is `scripts/skillers.js` (`show`, `extract`, `merge`, `candidates`); the agents do the judgment only.
 - Repo scope only learns from sessions whose working directory is inside the repo, instead of copying every project's patterns into a repo-local directory.
+- Processed sessions are tracked by the time of their last compacted message (`processedSessions` in `config.json`), so a session that continues after a compaction contributes its new messages next time. Old `lastTranscriptsProcessed` lists are read once and migrated.
 
 ### Fixed
 

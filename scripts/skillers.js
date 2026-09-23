@@ -134,6 +134,28 @@ function readConfig(dir) {
   return readJson(path.join(dir, 'config.json'), {}) || {};
 }
 
+// Per-session high-water mark: the time of the last message already compacted.
+// A session that keeps going after a compaction (including the one running
+// /skillers compact) contributes its newer messages on the next run.
+// Legacy configs kept only ids; their mark is the last compaction time.
+function processedMarks(config) {
+  const marks = new Map();
+  for (const [id, ts] of Object.entries(config.processedSessions || {})) {
+    const ms = Date.parse(ts);
+    if (!Number.isNaN(ms)) marks.set(id, ms);
+  }
+  const legacy = Date.parse(config.lastCompactedAt || '');
+  for (const id of config.lastTranscriptsProcessed || []) {
+    if (!marks.has(id)) marks.set(id, Number.isNaN(legacy) ? Date.now() : legacy);
+  }
+  return marks;
+}
+
+function msOf(ts) {
+  const ms = Date.parse(ts || '');
+  return Number.isNaN(ms) ? null : ms;
+}
+
 function loadThemes(dir) {
   const kdir = path.join(dir, 'knowledge');
   let files = [];
@@ -316,16 +338,25 @@ function extract(opts) {
   const tgs = targets(opts.scope);
   const sinceMs = Date.now() - opts.days * DAY_MS;
   const notes = [];
-  const processed = tgs.map(t => new Set(readConfig(t.dir).lastTranscriptsProcessed || []));
+  const marks = tgs.map(t => processedMarks(readConfig(t.dir)));
   const repo = tgs.find(t => t.scope === 'repo');
   const onlyRepo = opts.scope === 'repo';
 
   const all = [...readClaude(sinceMs), ...readCodex(sinceMs), ...readOpenCode(sinceMs, notes)]
-    .filter(s => s.messages.length > 0)
     .filter(s => !onlyRepo || isInside(s.cwd, repo.root))
-    // A session is done when every target it applies to has processed it.
-    // The repo target never records sessions from outside the repo.
-    .filter(s => !tgs.every((t, i) => (t.scope === 'repo' && !isInside(s.cwd, t.root)) || processed[i].has(s.id)))
+    .map(s => {
+      // Keep only messages newer than the oldest mark among the targets this
+      // session applies to. The repo target never records out-of-repo sessions.
+      const applicable = tgs.map((t, i) => i).filter(i => tgs[i].scope !== 'repo' || isInside(s.cwd, tgs[i].root));
+      const mark = Math.min(...applicable.map(i => (marks[i].has(s.id) ? marks[i].get(s.id) : -Infinity)));
+      const fresh = s.messages.filter(m => {
+        const ms = msOf(m.ts);
+        return ms === null ? mark === -Infinity : ms > mark;
+      });
+      const times = fresh.map(m => msOf(m.ts)).filter(ms => ms !== null);
+      return { ...s, messages: fresh, lastTs: times.length ? new Date(Math.max(...times)).toISOString() : null };
+    })
+    .filter(s => s.messages.length > 0)
     .sort((a, b) => String(b.start || '').localeCompare(String(a.start || '')));
 
   const picked = all.slice(0, MAX_SESSIONS).map(s => ({
@@ -334,6 +365,7 @@ function extract(opts) {
     cwd: s.cwd,
     inRepo: repo ? isInside(s.cwd, repo.root) : undefined,
     start: s.start,
+    lastTs: s.lastTs,
     userMessages: s.messages.length,
     messages: sample(s.messages),
     tools: s.tools
@@ -453,8 +485,11 @@ function merge(opts) {
   }
   for (const t of targets(opts.scope)) {
     const config = readConfig(t.dir);
-    const done = new Set(config.lastTranscriptsProcessed || []);
-    const mine = accepted.filter(o => !done.has(o.session) && (t.scope === 'global' || sessions.get(o.session).inRepo));
+    const marks = processedMarks(config);
+    const mine = accepted.filter(o => {
+      const mark = marks.has(o.session) ? marks.get(o.session) : -Infinity;
+      return Date.parse(o.ts) > mark && (t.scope === 'global' || sessions.get(o.session).inRepo);
+    });
     const existing = new Map(loadThemes(t.dir).map(th => [th.theme, th]));
     const byTheme = new Map();
     for (const o of mine) {
@@ -493,11 +528,17 @@ function merge(opts) {
         existing.set(name, fresh);
       }
     }
-    const processedNow = (digest.sessions || [])
-      .filter(s => t.scope === 'global' || s.inRepo)
-      .map(s => s.id);
+    for (const s of digest.sessions || []) {
+      if (t.scope !== 'global' && !s.inRepo) continue;
+      const ms = msOf(s.lastTs);
+      if (ms !== null && !(marks.get(s.id) >= ms)) marks.set(s.id, ms);
+    }
     config.lastCompactedAt = new Date(now).toISOString();
-    config.lastTranscriptsProcessed = [...new Set([...(config.lastTranscriptsProcessed || []), ...processedNow])].slice(-MAX_PROCESSED_IDS);
+    config.processedSessions = Object.fromEntries(
+      [...marks].filter(([, ms]) => Number.isFinite(ms)).sort((a, b) => a[1] - b[1]).slice(-MAX_PROCESSED_IDS)
+        .map(([id, ms]) => [id, new Date(ms).toISOString()])
+    );
+    delete config.lastTranscriptsProcessed;
     writeJson(path.join(t.dir, 'config.json'), config);
     summary.targets.push({
       scope: t.scope,

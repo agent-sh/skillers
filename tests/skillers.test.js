@@ -136,6 +136,16 @@ test('extract, merge, candidates and show on fixture transcripts', () => {
     // Processed sessions are not offered again, including out-of-repo ones under --scope=both.
     assert.match(run(fx, ['extract', '--days=2', '--scope=both']).stdout, /sessions: 0/);
 
+    // A session that continues after compaction contributes only its new messages.
+    const later = new Date(Date.now() + 60000).toISOString();
+    fs.appendFileSync(path.join(fx.home, '.claude', 'projects', '-work-app', 'c1.jsonl'),
+      JSON.stringify({ type: 'user', sessionId: 'c1', cwd: fx.repo, timestamp: later, message: { role: 'user', content: 'deploy staging again' } }) + '\n');
+    const cont = run(fx, ['extract', '--days=2', '--scope=both']);
+    assert.match(cont.stdout, /sessions: 1/);
+    const contDigest = JSON.parse(fs.readFileSync(digestPath, 'utf8'));
+    assert.deepEqual(contDigest.sessions[0].messages.map(m => m.text), ['deploy staging again']);
+    assert.equal(contDigest.sessions[0].lastTs, later);
+
     // Merging again does not double-count processed sessions.
     run(fx, ['extract', '--days=2', '--scope=both']);
     fs.writeFileSync(obsFile, JSON.stringify(observations.slice(0, 2)));
