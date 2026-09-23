@@ -13,7 +13,7 @@ Learn from your workflow patterns and suggest skills, hooks, and agents to autom
 | Command | Description |
 |---|---|
 | `/skillers show` | Show status, transcript stats, and knowledge themes |
-| `/skillers compact [--days=N]` | Analyze transcripts and extract patterns |
+| `/skillers compact [--days=N]` | Analyze transcripts and extract patterns (20 sessions per run; run again for more) |
 | `/skillers recommend` | Suggest skills, hooks, and agents to create |
 
 ## What It Finds
@@ -30,15 +30,11 @@ Learn from your workflow patterns and suggest skills, hooks, and agents to autom
 - One-off tasks that won't recur
 - Normal productive work without friction
 
-## Architecture
+## How it is built
 
-```
-Transcripts (Claude Code, Codex CLI, OpenCode)
-  ↓ /skillers compact (auto-detects installed tools)
-Knowledge themes (weighted JSON, frequency + recency + cross-session)
-  ↓ /skillers recommend (ecosystem-aware)
-Ranked suggestions → user picks → scaffold via existing tools
-```
+`scripts/skillers.js` does the deterministic work: it reads Claude Code, Codex and OpenCode transcripts, redacts secrets, writes a sampled digest, and later validates, weights, merges and prunes the knowledge files and applies the evidence bar. The model does the judgment: the compactor agent reads the digest and writes observations, the recommender agent picks what is worth automating. Nothing is created without your pick.
+
+Knowledge lives in `~/.claude/skillers/` (global) or `<repo>/.claude/skillers/` (repo scope, which only learns from sessions run inside that repo). `$AI_STATE_DIR` replaces `.claude`. Requires Node.js; reading OpenCode needs Node 22.5 or newer.
 
 ## Part of agentsys
 
