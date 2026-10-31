@@ -2,6 +2,17 @@
 
 Learn from your workflow patterns and suggest skills, hooks, and agents to automate repetitive work.
 
+## Install
+
+Claude Code:
+
+```bash
+/plugin marketplace add agent-sh/agentsys
+/plugin install skillers@agentsys
+```
+
+Other tools (OpenCode, Codex CLI, Cursor, Kiro): `npm install -g agentsys && agentsys install skillers`.
+
 ## How It Works
 
 1. Work normally - your AI tool saves conversation transcripts automatically (Claude Code, Codex, OpenCode)
@@ -15,6 +26,8 @@ Learn from your workflow patterns and suggest skills, hooks, and agents to autom
 | `/skillers show` | Show status, transcript stats, and knowledge themes |
 | `/skillers compact [--days=N]` | Analyze transcripts and extract patterns (20 sessions per run; run again for more) |
 | `/skillers recommend` | Suggest skills, hooks, and agents to create |
+
+`--days` defaults to 7. Every command takes `--scope=global|repo|both` (or `--global`, `--repo`); the default is `global`.
 
 ## What It Finds
 
